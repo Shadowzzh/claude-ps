@@ -1,8 +1,5 @@
 import { Box, Text, useApp, useInput, useStdout } from "ink";
-import { DetailPanel } from "./components/DetailPanel";
-import { HelpBar } from "./components/HelpBar";
-import { ProcessList } from "./components/ProcessList";
-import { StatusBar } from "./components/StatusBar";
+import { DetailPanel, HelpBar, ProcessList, StatusBar } from "./components";
 import { COLORS } from "./constants/theme";
 import { useProcesses } from "./hooks/useProcesses";
 
@@ -57,7 +54,7 @@ export function App({ interval }: AppProps) {
 	// 计算左右面板宽度
 	const leftWidth = Math.floor(termWidth * 0.45);
 	const rightWidth = termWidth - leftWidth - 1;
-	// 主内容区高度 = 终端高度 - 标题(1行) - 状态栏(1行) - 帮助栏(2行)
+	// 主内容区高度 = 终端高度 - 帮助栏(4行)
 	const contentHeight = termHeight - 4;
 
 	if (error) {
@@ -69,23 +66,36 @@ export function App({ interval }: AppProps) {
 	}
 
 	return (
-		<Box flexDirection="column" width={termWidth} height={termHeight}>
-			{/* 标题栏 */}
-			<Box>
-				<Text bold color={COLORS.title}>
-					claude-ps
-				</Text>
-				<Text color={COLORS.label}> - Claude Code 进程管理器</Text>
-			</Box>
-
-			{/* 状态栏 */}
-			<StatusBar processes={processes} />
-
+		<Box
+			flexDirection="column"
+			width={termWidth}
+			height={termHeight}
+			paddingX={4}
+		>
 			{/* 主内容区：左右分栏 */}
 			<Box height={contentHeight}>
 				{/* 左侧：进程列表 */}
 				<Box width={leftWidth} flexDirection="column" height={contentHeight}>
+					{/* 标题栏 */}
+					<Box flexDirection="column">
+						<Text bold color="cyan">
+							{`
+┏━╸╻  ┏━┓╻ ╻╺┳┓┏━╸   ┏━┓┏━┓
+┃  ┃  ┣━┫┃ ┃ ┃┃┣╸ ╺━╸┣━┛┗━┓
+┗━╸┗━╸╹ ╹┗━┛╺┻┛┗━╸   ╹  ┗━┛
+`}
+						</Text>
+					</Box>
+
+					<Box flexDirection="column" height={2}>
+						<Text color="gray">Claude Code 进程管理器</Text>
+					</Box>
+
+					{/* 状态栏 */}
+					<StatusBar processes={processes} />
+
 					<ProcessList
+						leftWidth={leftWidth}
 						processes={processes}
 						selectedIndex={selectedIndex}
 						loading={loading}
@@ -98,7 +108,13 @@ export function App({ interval }: AppProps) {
 				</Box>
 
 				{/* 右侧：详情面板 */}
-				<Box width={rightWidth} flexDirection="column" height={contentHeight}>
+				<Box
+					width={rightWidth}
+					flexDirection="column"
+					height={contentHeight}
+					paddingX={4}
+					paddingY={2}
+				>
 					<DetailPanel process={selectedProcess} />
 				</Box>
 			</Box>

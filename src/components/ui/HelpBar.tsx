@@ -1,7 +1,8 @@
 import { Box, Text } from "ink";
 import React from "react";
-import { COLORS } from "../constants/theme";
-import type { SortField } from "../types";
+import { COLORS } from "../../constants/theme";
+import type { SortField } from "../../types";
+import { KeyHint } from "./primitives";
 
 interface HelpBarProps {
 	processCount: number;
@@ -9,13 +10,8 @@ interface HelpBarProps {
 	sortField: SortField;
 }
 
-interface KeyHint {
-	key: string;
-	desc: string;
-}
-
 /** 快捷键提示配置 */
-const hints: KeyHint[] = [
+const hints: Array<{ key: string; desc: string }> = [
 	{ key: "↑/↓", desc: "移动" },
 	{ key: "d", desc: "终止" },
 	{ key: "D", desc: "强杀" },
@@ -38,22 +34,18 @@ const sortFieldLabels: Record<SortField, string> = {
  */
 export function HelpBar({ processCount, interval, sortField }: HelpBarProps) {
 	return (
-		<Box justifyContent="space-between">
-			<Box>
-				{hints.map((hint, i) => (
-					<React.Fragment key={hint.key}>
-						<Text color={COLORS.selected}>{hint.key}</Text>
-						<Text color={COLORS.label}> {hint.desc}</Text>
-						{i < hints.length - 1 && <Text> </Text>}
-					</React.Fragment>
+		<Box justifyContent="space-between" paddingX={1}>
+			<Box gap={1}>
+				{hints.map((hint) => (
+					<KeyHint key={hint.key} shortcut={hint.key} desc={hint.desc} />
 				))}
 			</Box>
-			<Box>
-				<Text color={COLORS.value}>{processCount} 进程</Text>
-				<Text color={COLORS.label}> | </Text>
-				<Text color={COLORS.label}>排序: </Text>
-				<Text color={COLORS.value}>{sortFieldLabels[sortField]}</Text>
-				<Text color={COLORS.label}> | </Text>
+
+			<Box gap={1}>
+				<Text>{processCount} 进程</Text>
+				<Text color={COLORS.label}>|</Text>
+				<Text color={COLORS.label}>排序: {sortFieldLabels[sortField]}</Text>
+				<Text color={COLORS.label}>|</Text>
 				<Text color={COLORS.label}>刷新: {interval}s</Text>
 			</Box>
 		</Box>

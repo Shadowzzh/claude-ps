@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
-import { COLORS, ESTIMATED_TOTAL_MEMORY_MB } from "../constants/theme";
-import type { EnrichedProcess } from "../types";
+import { COLORS, ESTIMATED_TOTAL_MEMORY_MB } from "../../constants/theme";
+import type { EnrichedProcess } from "../../types";
 
 interface StatusBarProps {
 	processes: EnrichedProcess[];
@@ -38,7 +38,7 @@ export function StatusBar({ processes }: StatusBarProps) {
 	const stats = calculateStats(processes);
 
 	return (
-		<Box>
+		<Box height={2}>
 			<Text color={COLORS.label}>进程: </Text>
 			<Text color={COLORS.value}>{stats.count}</Text>
 			<Text color={COLORS.label}> | CPU: </Text>
