@@ -23,6 +23,11 @@ const cli = meow(
 	{
 		importMeta: import.meta,
 		flags: {
+			help: {
+				type: "boolean",
+				shortFlag: "h",
+				default: false,
+			},
 			list: {
 				type: "boolean",
 				shortFlag: "l",
@@ -37,6 +42,11 @@ const cli = meow(
 				type: "number",
 				shortFlag: "i",
 				default: 2,
+			},
+			version: {
+				type: "boolean",
+				shortFlag: "v",
+				default: false,
 			},
 		},
 	},
