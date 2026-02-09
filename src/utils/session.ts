@@ -30,6 +30,14 @@ export async function getSessionPath(
 		const files = await readdir(sessionsDir);
 		const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
 
+		// 调试日志
+		if (process.env.DEBUG_SESSION) {
+			console.error(`[DEBUG] cwd: ${cwd}`);
+			console.error(`[DEBUG] projectDir: ${projectDir}`);
+			console.error(`[DEBUG] sessionsDir: ${sessionsDir}`);
+			console.error(`[DEBUG] found ${jsonlFiles.length} jsonl files`);
+		}
+
 		if (jsonlFiles.length === 0) return "";
 
 		// 获取每个文件的创建时间、修改时间和大小
@@ -47,46 +55,67 @@ export async function getSessionPath(
 			}),
 		);
 
-		// 过滤掉太小的文件（< 1KB 通常是空会话或只有 summary）
-		const minSize = 1024;
-		const validFiles = fileStats.filter((f) => f.size >= minSize);
+		// 调试日志
+		if (process.env.DEBUG_SESSION) {
+			console.error(`[DEBUG] total files: ${fileStats.length}`);
+			for (const f of fileStats) {
+				console.error(
+					`[DEBUG]   ${f.path.split("/").pop()}: ${f.size} bytes, birth: ${f.birthtime.toISOString()}, mtime: ${new Date(f.mtimeMs).toISOString()}`,
+				);
+			}
+			if (startTime) {
+				console.error(`[DEBUG] startTime: ${startTime.toISOString()}`);
+			}
+		}
 
-		// 如果提供了启动时间，尝试在有效文件中匹配
-		if (startTime && validFiles.length > 0) {
+		// 如果提供了启动时间，尝试匹配
+		if (startTime && fileStats.length > 0) {
 			const startMs = startTime.getTime();
 
-			// 策略1: 基于创建时间匹配（新建会话场景，10秒容差）
-			const birthtimeThreshold = 10000;
-			const birthtimeMatched = validFiles
+			// 策略1: 基于创建时间匹配（新建会话场景，放宽到 5 分钟容差）
+			const birthtimeThreshold = 300000; // 5 分钟
+			const birthtimeMatched = fileStats
 				.filter(
 					(f) => Math.abs(f.birthtime.getTime() - startMs) < birthtimeThreshold,
 				)
 				.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
 			if (birthtimeMatched.length > 0) {
+				if (process.env.DEBUG_SESSION) {
+					console.error(
+						`[DEBUG] matched by birthtime: ${birthtimeMatched[0].path}`,
+					);
+				}
 				return birthtimeMatched[0].path;
 			}
 
-			// 策略2: 基于修改时间匹配（resume 会话场景，60秒容差）
-			// resume 时会立即写入会话文件，所以修改时间会与启动时间接近
-			const mtimeThreshold = 60000;
-			const mtimeMatched = validFiles
+			// 策略2: 基于修改时间匹配（resume 会话场景，放宽到 10 分钟容差）
+			const mtimeThreshold = 600000; // 10 分钟
+			const mtimeMatched = fileStats
 				.filter((f) => {
 					const mtimeDiff = f.mtimeMs - startMs;
-					// 修改时间在启动时间之后，且在容差内
-					return mtimeDiff >= 0 && mtimeDiff < mtimeThreshold;
+					// 修改时间在启动时间前后都可以，只要在容差内
+					return Math.abs(mtimeDiff) < mtimeThreshold;
 				})
-				.sort((a, b) => a.mtimeMs - b.mtimeMs); // 选择启动后最先被修改的
+				.sort(
+					(a, b) =>
+						Math.abs(a.mtimeMs - startMs) - Math.abs(b.mtimeMs - startMs),
+				); // 选择时间最接近的
 
 			if (mtimeMatched.length > 0) {
+				if (process.env.DEBUG_SESSION) {
+					console.error(`[DEBUG] matched by mtime: ${mtimeMatched[0].path}`);
+				}
 				return mtimeMatched[0].path;
 			}
 		}
 
-		// 回退：返回最新修改的文件（优先有效文件，否则所有文件）
-		const fallbackFiles = validFiles.length > 0 ? validFiles : fileStats;
-		fallbackFiles.sort((a, b) => b.mtimeMs - a.mtimeMs);
-		return fallbackFiles[0]?.path || "";
+		// 回退：返回最新修改的文件
+		fileStats.sort((a, b) => b.mtimeMs - a.mtimeMs);
+		if (process.env.DEBUG_SESSION && fileStats[0]) {
+			console.error(`[DEBUG] fallback to latest: ${fileStats[0].path}`);
+		}
+		return fileStats[0]?.path || "";
 	} catch {
 		return "";
 	}
@@ -299,4 +328,196 @@ function truncate(text: string, maxLen: number): string {
 	const clean = text.replace(/\s+/g, " ").trim();
 	if (clean.length <= maxLen) return clean;
 	return `${clean.slice(0, maxLen - 3)}...`;
+}
+
+/**
+ * 格式化文件大小
+ * @param bytes 字节数
+ * @returns 格式化后的大小字符串
+ */
+function formatSize(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * 格式化时间差
+ * @param date 日期对象
+ * @param referenceDate 参考日期
+ * @returns 格式化后的时间差字符串
+ */
+function formatTimeDiff(date: Date, referenceDate: Date): string {
+	const diffMs = date.getTime() - referenceDate.getTime();
+	const diffSec = Math.abs(diffMs / 1000);
+
+	if (diffSec < 60) {
+		return diffMs >= 0
+			? `启动后 ${diffSec.toFixed(0)} 秒`
+			: `启动前 ${diffSec.toFixed(0)} 秒`;
+	}
+
+	const diffMin = diffSec / 60;
+	return diffMs >= 0
+		? `启动后 ${diffMin.toFixed(1)} 分钟`
+		: `启动前 ${diffMin.toFixed(1)} 分钟`;
+}
+
+/**
+ * 调试会话匹配逻辑，输出详细的匹配信息
+ * @param processes Claude 进程列表
+ * @returns 格式化的调试信息字符串
+ */
+export async function debugSessionMatching(
+	processes: Array<{ pid: number; cwd: string; startTime: Date }>,
+): Promise<string> {
+	const output: string[] = [];
+	output.push("=== Claude Code 会话调试信息 ===\n");
+
+	if (processes.length === 0) {
+		output.push("未找到运行中的 Claude Code 进程\n");
+		return output.join("\n");
+	}
+
+	let successCount = 0;
+
+	for (let i = 0; i < processes.length; i++) {
+		const proc = processes[i];
+		output.push(`进程 #${i + 1} (PID: ${proc.pid})`);
+		output.push(`  工作目录: ${proc.cwd}`);
+		output.push(`  启动时间: ${proc.startTime.toISOString()}`);
+
+		const projectDir = cwdToProjectDir(proc.cwd);
+		const sessionsDir = join(homedir(), ".claude", "projects", projectDir);
+		output.push(`  项目目录: ${projectDir}`);
+		output.push(`  会话目录: ${sessionsDir}`);
+		output.push("");
+
+		try {
+			const files = await readdir(sessionsDir);
+			const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
+
+			if (jsonlFiles.length === 0) {
+				output.push("  ⚠️  未找到会话文件");
+				output.push("");
+				continue;
+			}
+
+			output.push("  找到的会话文件:");
+			const { stat } = await import("node:fs/promises");
+			const fileStats = await Promise.all(
+				jsonlFiles.map(async (f) => {
+					const path = join(sessionsDir, f);
+					const s = await stat(path);
+					return {
+						name: f,
+						path,
+						birthtime: s.birthtime,
+						mtime: new Date(s.mtimeMs),
+						size: s.size,
+					};
+				}),
+			);
+
+			// 显示所有文件信息
+			for (const file of fileStats) {
+				const ignored = file.size < 1024;
+				const prefix = ignored ? "    ✗" : "    ✓";
+				output.push(`${prefix} ${file.name}`);
+				output.push(`      大小: ${formatSize(file.size)}`);
+				if (ignored) {
+					output.push("      (< 1KB, 已忽略)");
+				}
+				output.push(
+					`      创建: ${file.birthtime.toISOString()} (${formatTimeDiff(file.birthtime, proc.startTime)})`,
+				);
+				output.push(
+					`      修改: ${file.mtime.toISOString()} (${formatTimeDiff(file.mtime, proc.startTime)})`,
+				);
+				output.push("");
+			}
+
+			// 执行匹配逻辑
+			const startMs = proc.startTime.getTime();
+			const validFiles = fileStats.filter((f) => f.size >= 1024);
+
+			let matchedFile: (typeof fileStats)[0] | null = null;
+			let matchStrategy = "";
+
+			// 策略1: 创建时间匹配
+			const birthtimeThreshold = 300000; // 5 分钟
+			const birthtimeMatched = validFiles
+				.filter(
+					(f) => Math.abs(f.birthtime.getTime() - startMs) < birthtimeThreshold,
+				)
+				.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+
+			if (birthtimeMatched.length > 0) {
+				matchedFile = birthtimeMatched[0];
+				matchStrategy = "创建时间匹配 ✓";
+			} else {
+				// 策略2: 修改时间匹配
+				const mtimeThreshold = 600000; // 10 分钟
+				const mtimeMatched = validFiles
+					.filter((f) => {
+						const mtimeDiff = f.mtime.getTime() - startMs;
+						return Math.abs(mtimeDiff) < mtimeThreshold;
+					})
+					.sort(
+						(a, b) =>
+							Math.abs(a.mtime.getTime() - startMs) -
+							Math.abs(b.mtime.getTime() - startMs),
+					);
+
+				if (mtimeMatched.length > 0) {
+					matchedFile = mtimeMatched[0];
+					matchStrategy = "修改时间匹配 ✓";
+				} else {
+					// 策略3: 回退到最新文件
+					const sorted = [...validFiles].sort(
+						(a, b) => b.mtime.getTime() - a.mtime.getTime(),
+					);
+					if (sorted.length > 0) {
+						matchedFile = sorted[0];
+						matchStrategy = "回退到最新文件";
+					}
+				}
+			}
+
+			// 显示匹配结果
+			output.push("  匹配结果:");
+			output.push(`    策略: ${matchStrategy}`);
+
+			if (matchedFile) {
+				output.push(`    选择: ${matchedFile.name}`);
+
+				// 读取消息数量
+				try {
+					const messages = await getAllMessages(matchedFile.path);
+					output.push(`    消息数: ${messages.length} 条`);
+					successCount++;
+				} catch {
+					output.push("    消息数: 读取失败");
+				}
+			} else {
+				output.push("    选择: 无");
+			}
+
+			output.push("");
+			output.push("---");
+			output.push("");
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : String(error);
+			output.push(`  ❌ 错误: ${errorMsg}`);
+			output.push("");
+			output.push("---");
+			output.push("");
+		}
+	}
+
+	output.push(
+		`总计: ${processes.length} 个进程, ${successCount} 个成功匹配会话`,
+	);
+
+	return output.join("\n");
 }

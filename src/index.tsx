@@ -10,6 +10,7 @@ const cli = meow(
   Options
     -l, --list        非交互模式，仅列出进程
     -j, --json        JSON 格式输出（配合 --list）
+    -d, --debug       显示会话匹配调试信息
     -i, --interval    刷新间隔秒数（默认 2）
     -v, --version     显示版本
     -h, --help        显示帮助
@@ -18,6 +19,7 @@ const cli = meow(
     $ claude-ps              启动 TUI
     $ claude-ps --list       列出进程后退出
     $ claude-ps --json       JSON 格式输出
+    $ claude-ps --debug      显示会话匹配详情
     $ claude-ps -i 5         设置刷新间隔为 5 秒
 `,
 	{
@@ -38,6 +40,11 @@ const cli = meow(
 				shortFlag: "j",
 				default: false,
 			},
+			debug: {
+				type: "boolean",
+				shortFlag: "d",
+				default: false,
+			},
 			interval: {
 				type: "number",
 				shortFlag: "i",
@@ -52,14 +59,18 @@ const cli = meow(
 	},
 );
 
-const { list, json, interval } = cli.flags;
+const { list, json, debug, interval } = cli.flags;
 
-if (list || json) {
+if (list || json || debug) {
 	// 非交互模式
 	const { getClaudeProcesses } = await import("./utils/process");
 	const processes = await getClaudeProcesses();
 
-	if (json) {
+	if (debug) {
+		const { debugSessionMatching } = await import("./utils/session");
+		const debugInfo = await debugSessionMatching(processes);
+		console.log(debugInfo);
+	} else if (json) {
 		console.log(JSON.stringify(processes, null, 2));
 	} else {
 		console.log("PID\tTTY\tCWD");
