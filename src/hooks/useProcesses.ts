@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EnrichedProcess, SortField, UseProcessesReturn } from "../types";
 import { getClaudeProcesses, killProcess } from "../utils/process";
-import { getRecentMessages, getSessionPath } from "../utils/session";
+import {
+	getAllMessages,
+	getNewMessages,
+	getSessionPath,
+} from "../utils/session";
+import { useSessionWatcher } from "./useSessionWatcher";
 
 /**
  * 对进程列表进行排序
@@ -47,6 +52,9 @@ export function useProcesses(interval: number): UseProcessesReturn {
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [sortField, setSortField] = useState<SortField>("default");
 
+	// 记录每个会话文件已读取的行数
+	const sessionLineNumbers = useRef<Map<string, number>>(new Map());
+
 	/**
 	 * 刷新进程列表
 	 * 获取所有 Claude 进程并加载其会话信息
@@ -59,7 +67,17 @@ export function useProcesses(interval: number): UseProcessesReturn {
 			const enriched = await Promise.all(
 				procs.map(async (proc) => {
 					const sessionPath = await getSessionPath(proc.cwd, proc.startTime);
-					const messages = await getRecentMessages(sessionPath);
+					const messages = await getAllMessages(sessionPath);
+
+					// 初始化行号记录
+					if (sessionPath && !sessionLineNumbers.current.has(sessionPath)) {
+						const content = await import("node:fs/promises").then((m) =>
+							m.readFile(sessionPath, "utf-8").catch(() => ""),
+						);
+						const lines = content.trim().split("\n");
+						sessionLineNumbers.current.set(sessionPath, lines.length);
+					}
+
 					return {
 						...proc,
 						sessionPath,
@@ -81,6 +99,54 @@ export function useProcesses(interval: number): UseProcessesReturn {
 			setLoading(false);
 		}
 	}, []);
+
+	/**
+	 * 增量更新指定会话文件的消息
+	 * @param sessionPath 会话文件路径
+	 */
+	const updateSessionMessages = useCallback(async (sessionPath: string) => {
+		if (!sessionPath) return;
+
+		try {
+			// 获取上次读取的行号
+			const fromLine = sessionLineNumbers.current.get(sessionPath) || 0;
+
+			// 增量读取新消息
+			const { messages: newMessages, totalLines } = await getNewMessages(
+				sessionPath,
+				fromLine,
+			);
+
+			// 如果有新消息，更新对应进程
+			if (newMessages.length > 0) {
+				setRawProcesses((prev) =>
+					prev.map((proc) => {
+						if (proc.sessionPath === sessionPath) {
+							return {
+								...proc,
+								messages: [...proc.messages, ...newMessages],
+							};
+						}
+						return proc;
+					}),
+				);
+
+				// 更新行号记录
+				sessionLineNumbers.current.set(sessionPath, totalLines);
+			}
+		} catch {
+			// 增量更新失败时静默忽略，等待下次定时刷新
+		}
+	}, []);
+
+	// 获取所有会话文件路径
+	const sessionPaths = useMemo(
+		() => rawProcesses.map((p) => p.sessionPath).filter((p) => p),
+		[rawProcesses],
+	);
+
+	// 监听会话文件变化
+	useSessionWatcher(sessionPaths, updateSessionMessages);
 
 	useEffect(() => {
 		refresh();

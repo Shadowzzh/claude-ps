@@ -115,7 +115,7 @@ export function App({ interval }: AppProps) {
 					paddingX={4}
 					paddingY={2}
 				>
-					<DetailPanel process={selectedProcess} />
+					<DetailPanel process={selectedProcess} isLive={true} />
 				</Box>
 			</Box>
 

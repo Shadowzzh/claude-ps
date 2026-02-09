@@ -144,6 +144,110 @@ export async function getRecentMessages(
 }
 
 /**
+ * 增量读取会话文件中的新消息
+ * @param sessionPath 会话文件路径
+ * @param fromLine 起始行号（从 0 开始）
+ * @returns 新消息数组和当前总行数
+ */
+export async function getNewMessages(
+	sessionPath: string,
+	fromLine: number,
+): Promise<{ messages: SessionMessage[]; totalLines: number }> {
+	if (!sessionPath) return { messages: [], totalLines: 0 };
+
+	try {
+		const content = await readFile(sessionPath, "utf-8");
+		const lines = content.trim().split("\n");
+		const totalLines = lines.length;
+
+		// 只处理新增的行
+		const newLines = lines.slice(fromLine);
+		const messages: SessionMessage[] = [];
+
+		for (const line of newLines) {
+			try {
+				const entry = JSON.parse(line);
+
+				if (entry.type === "user" && entry.message?.content) {
+					const text = extractUserText(entry.message.content);
+					if (text && !isMetaMessage(text)) {
+						messages.push({
+							role: "user",
+							content: truncate(text, 100),
+							timestamp: entry.timestamp || "",
+						});
+					}
+				} else if (entry.type === "assistant" && entry.message?.content) {
+					const text = extractAssistantText(entry.message.content);
+					if (text) {
+						messages.push({
+							role: "assistant",
+							content: truncate(text, 100),
+							timestamp: entry.timestamp || "",
+						});
+					}
+				}
+			} catch {
+				// 跳过无效行
+			}
+		}
+
+		return { messages, totalLines };
+	} catch {
+		return { messages: [], totalLines: 0 };
+	}
+}
+
+/**
+ * 读取会话文件中的所有消息（不限制数量）
+ * @param sessionPath 会话文件路径
+ * @returns 所有会话消息数组
+ */
+export async function getAllMessages(
+	sessionPath: string,
+): Promise<SessionMessage[]> {
+	if (!sessionPath) return [];
+
+	try {
+		const content = await readFile(sessionPath, "utf-8");
+		const lines = content.trim().split("\n");
+		const messages: SessionMessage[] = [];
+
+		for (const line of lines) {
+			try {
+				const entry = JSON.parse(line);
+
+				if (entry.type === "user" && entry.message?.content) {
+					const text = extractUserText(entry.message.content);
+					if (text && !isMetaMessage(text)) {
+						messages.push({
+							role: "user",
+							content: truncate(text, 100),
+							timestamp: entry.timestamp || "",
+						});
+					}
+				} else if (entry.type === "assistant" && entry.message?.content) {
+					const text = extractAssistantText(entry.message.content);
+					if (text) {
+						messages.push({
+							role: "assistant",
+							content: truncate(text, 100),
+							timestamp: entry.timestamp || "",
+						});
+					}
+				}
+			} catch {
+				// 跳过无效行
+			}
+		}
+
+		return messages;
+	} catch {
+		return [];
+	}
+}
+
+/**
  * 从用户消息内容中提取文本
  * @param content 消息内容（字符串或数组）
  * @returns 提取的文本，非字符串返回空

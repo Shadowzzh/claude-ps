@@ -19,6 +19,12 @@ export interface SessionMessage {
 	timestamp: string;
 }
 
+/** 增量读取结果 */
+export interface IncrementalMessages {
+	messages: SessionMessage[];
+	totalLines: number;
+}
+
 /** 包含会话消息的增强进程信息 */
 export interface EnrichedProcess extends ClaudeProcess {
 	messages: SessionMessage[];

@@ -100,7 +100,7 @@ export async function getClaudeProcesses(): Promise<ClaudeProcess[]> {
 	let stdout: string;
 	try {
 		const result = await execAsync(
-			`ps -eo pid,tty,command | grep -E '^\\s*[0-9]+\\s+\\S+\\s+claude\\s*$' | grep -v grep`,
+			`ps -eo pid,tty,command | grep -E '^\\s*[0-9]+\\s+\\S+\\s+claude(\\s|$)' | grep -v 'chrome-native-host' | grep -v grep`,
 		);
 		stdout = result.stdout;
 	} catch {

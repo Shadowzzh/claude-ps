@@ -6,13 +6,17 @@ import { EmptyPrompt, InfoRow, Section } from "./primitives";
 
 interface DetailPanelProps {
 	process: EnrichedProcess | null;
+	isLive?: boolean;
 }
 
 /**
  * 详情面板组件
  * 显示选中进程的 CPU、内存、会话信息和最近对话
  */
-export function DetailPanel({ process: proc }: DetailPanelProps) {
+export function DetailPanel({
+	process: proc,
+	isLive = true,
+}: DetailPanelProps) {
 	if (!proc) {
 		return <EmptyPrompt message="选择一个进程查看详情" />;
 	}
@@ -37,10 +41,11 @@ export function DetailPanel({ process: proc }: DetailPanelProps) {
 				</Text>
 			</Box>
 
-			<Box paddingBottom={1}>
+			<Box paddingBottom={1} flexDirection="row" gap={1}>
 				<Text bold color="cyan">
 					最近对话
 				</Text>
+				{isLive && proc.sessionPath && <Text color="green">● 实时</Text>}
 			</Box>
 
 			{/* 最近对话 */}
