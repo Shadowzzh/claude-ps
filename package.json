@@ -1,6 +1,6 @@
 {
 	"name": "claude-ps",
-	"version": "0.2.3",
+	"version": "0.2.4",
 	"description": "TUI application for viewing and managing Claude Code processes",
 	"type": "module",
 	"main": "dist/index.js",
