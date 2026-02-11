@@ -1,5 +1,6 @@
 import chokidar from "chokidar";
 import { useEffect, useRef } from "react";
+import { clearSessionCache } from "../utils/session";
 
 /**
  * 文件监听 Hook
@@ -32,6 +33,9 @@ export function useSessionWatcher(
 		// 监听文件变化事件
 		// @ts-expect-error - chokidar 类型定义与 Node.js FSWatcher 冲突
 		watcher.on("change", (path: string) => {
+			// 清除该文件的缓存
+			clearSessionCache(path);
+
 			// 防抖处理：100ms 内只触发一次
 			const existingTimer = debounceTimersRef.current.get(path);
 			if (existingTimer) {

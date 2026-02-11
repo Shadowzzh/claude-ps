@@ -1,12 +1,17 @@
+import pLimit from "p-limit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EnrichedProcess, SortField, UseProcessesReturn } from "../types";
 import { getClaudeProcesses, killProcess } from "../utils/process";
 import {
+	clearSessionCache,
 	getAllMessages,
 	getNewMessages,
 	getSessionPath,
 } from "../utils/session";
 import { useSessionWatcher } from "./useSessionWatcher";
+
+// 并发限制：最多同时处理 5 个进程的会话信息
+const sessionLimit = pLimit(5);
 
 /**
  * 对进程列表进行排序
@@ -63,27 +68,25 @@ export function useProcesses(interval: number): UseProcessesReturn {
 		try {
 			const procs = await getClaudeProcesses();
 
-			// 并行获取所有会话信息
+			// 使用并发限制并行获取所有会话信息
 			const enriched = await Promise.all(
-				procs.map(async (proc) => {
-					const sessionPath = await getSessionPath(proc.cwd, proc.startTime);
-					const messages = await getAllMessages(sessionPath);
+				procs.map((proc) =>
+					sessionLimit(async () => {
+						const sessionPath = await getSessionPath(proc.cwd, proc.startTime);
+						const { messages, lineCount } = await getAllMessages(sessionPath);
 
-					// 初始化行号记录
-					if (sessionPath && !sessionLineNumbers.current.has(sessionPath)) {
-						const content = await import("node:fs/promises").then((m) =>
-							m.readFile(sessionPath, "utf-8").catch(() => ""),
-						);
-						const lines = content.trim().split("\n");
-						sessionLineNumbers.current.set(sessionPath, lines.length);
-					}
+						// 初始化行号记录（使用 getAllMessages 返回的行数）
+						if (sessionPath && !sessionLineNumbers.current.has(sessionPath)) {
+							sessionLineNumbers.current.set(sessionPath, lineCount);
+						}
 
-					return {
-						...proc,
-						sessionPath,
-						messages,
-					};
-				}),
+						return {
+							...proc,
+							sessionPath,
+							messages,
+						};
+					}),
+				),
 			);
 
 			setRawProcesses(enriched);

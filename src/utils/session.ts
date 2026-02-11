@@ -1,7 +1,30 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import pLimit from "p-limit";
 import type { SessionMessage } from "../types";
+import { FileCache } from "./cache";
+
+// 并发限制：最多同时进行 10 个文件 stat 操作
+const statLimit = pLimit(10);
+
+/**
+ * 会话文件内容缓存
+ * 缓存已读取的文件内容，避免重复读取
+ */
+const sessionContentCache = new FileCache<string>({
+	maxSize: 50,
+	ttl: 5 * 60 * 1000, // 5 分钟
+	loader: async (path: string) => {
+		return readFile(path, "utf-8");
+	},
+});
+
+/**
+ * 最大保留的消息数量
+ * 超过此数量时，只保留最新的消息
+ */
+const MAX_MESSAGES = 100;
 
 /**
  * 将工作目录路径转换为 Claude 项目目录名
@@ -40,19 +63,20 @@ export async function getSessionPath(
 
 		if (jsonlFiles.length === 0) return "";
 
-		// 获取每个文件的创建时间、修改时间和大小
-		const { stat } = await import("node:fs/promises");
+		// 获取每个文件的创建时间、修改时间和大小（使用并发限制）
 		const fileStats = await Promise.all(
-			jsonlFiles.map(async (f) => {
-				const path = join(sessionsDir, f);
-				const s = await stat(path);
-				return {
-					path,
-					birthtime: s.birthtime,
-					mtimeMs: s.mtimeMs,
-					size: s.size,
-				};
-			}),
+			jsonlFiles.map((f) =>
+				statLimit(async () => {
+					const path = join(sessionsDir, f);
+					const s = await stat(path);
+					return {
+						path,
+						birthtime: s.birthtime,
+						mtimeMs: s.mtimeMs,
+						size: s.size,
+					};
+				}),
+			),
 		);
 
 		// 调试日志
@@ -185,7 +209,8 @@ export async function getNewMessages(
 	if (!sessionPath) return { messages: [], totalLines: 0 };
 
 	try {
-		const content = await readFile(sessionPath, "utf-8");
+		// 使用缓存读取文件内容
+		const content = await sessionContentCache.get(sessionPath);
 		const lines = content.trim().split("\n");
 		const totalLines = lines.length;
 
@@ -228,17 +253,18 @@ export async function getNewMessages(
 }
 
 /**
- * 读取会话文件中的所有消息（不限制数量）
+ * 读取会话文件中的所有消息（限制最大数量）
  * @param sessionPath 会话文件路径
- * @returns 所有会话消息数组
+ * @returns 包含消息数组和总行数的对象
  */
 export async function getAllMessages(
 	sessionPath: string,
-): Promise<SessionMessage[]> {
-	if (!sessionPath) return [];
+): Promise<{ messages: SessionMessage[]; lineCount: number }> {
+	if (!sessionPath) return { messages: [], lineCount: 0 };
 
 	try {
-		const content = await readFile(sessionPath, "utf-8");
+		// 使用缓存读取文件内容
+		const content = await sessionContentCache.get(sessionPath);
 		const lines = content.trim().split("\n");
 		const messages: SessionMessage[] = [];
 
@@ -270,9 +296,13 @@ export async function getAllMessages(
 			}
 		}
 
-		return messages;
+		// 限制消息数量，只保留最新的 MAX_MESSAGES 条
+		const limitedMessages =
+			messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages;
+
+		return { messages: limitedMessages, lineCount: lines.length };
 	} catch {
-		return [];
+		return { messages: [], lineCount: 0 };
 	}
 }
 
@@ -364,6 +394,21 @@ function formatTimeDiff(date: Date, referenceDate: Date): string {
 }
 
 /**
+ * 清除指定会话文件的缓存
+ * @param sessionPath 会话文件路径
+ */
+export function clearSessionCache(sessionPath: string): void {
+	sessionContentCache.clear(sessionPath);
+}
+
+/**
+ * 清除所有会话缓存
+ */
+export function clearAllSessionCache(): void {
+	sessionContentCache.clearAll();
+}
+
+/**
  * 调试会话匹配逻辑，输出详细的匹配信息
  * @param processes Claude 进程列表
  * @returns 格式化的调试信息字符串
@@ -404,19 +449,20 @@ export async function debugSessionMatching(
 			}
 
 			output.push("  找到的会话文件:");
-			const { stat } = await import("node:fs/promises");
 			const fileStats = await Promise.all(
-				jsonlFiles.map(async (f) => {
-					const path = join(sessionsDir, f);
-					const s = await stat(path);
-					return {
-						name: f,
-						path,
-						birthtime: s.birthtime,
-						mtime: new Date(s.mtimeMs),
-						size: s.size,
-					};
-				}),
+				jsonlFiles.map((f) =>
+					statLimit(async () => {
+						const path = join(sessionsDir, f);
+						const s = await stat(path);
+						return {
+							name: f,
+							path,
+							birthtime: s.birthtime,
+							mtime: new Date(s.mtimeMs),
+							size: s.size,
+						};
+					}),
+				),
 			);
 
 			// 显示所有文件信息
@@ -493,7 +539,7 @@ export async function debugSessionMatching(
 
 				// 读取消息数量
 				try {
-					const messages = await getAllMessages(matchedFile.path);
+					const { messages } = await getAllMessages(matchedFile.path);
 					output.push(`    消息数: ${messages.length} 条`);
 					successCount++;
 				} catch {

@@ -7,9 +7,7 @@
 	"bin": {
 		"claude-ps": "dist/index.js"
 	},
-	"files": [
-		"dist"
-	],
+	"files": ["dist"],
 	"scripts": {
 		"dev": "tsx src/index.tsx",
 		"build": "tsup",
@@ -19,12 +17,7 @@
 		"typecheck": "tsc --noEmit",
 		"all": "pnpm format && pnpm typecheck && pnpm lint"
 	},
-	"keywords": [
-		"claude",
-		"tui",
-		"terminal",
-		"process-manager"
-	],
+	"keywords": ["claude", "tui", "terminal", "process-manager"],
 	"author": "ziheng",
 	"license": "MIT",
 	"dependencies": {
@@ -33,6 +26,7 @@
 		"fullscreen-ink": "^0.1.0",
 		"ink": "^5.0.1",
 		"meow": "^13.2.0",
+		"p-limit": "^7.3.0",
 		"react": "^18.3.1"
 	},
 	"devDependencies": {
