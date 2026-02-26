@@ -28,11 +28,95 @@ const MAX_MESSAGES = 100;
 
 /**
  * 将工作目录路径转换为 Claude 项目目录名
+ * Claude Code 的实际规则：替换 /、_、. 为 -
  * @param cwd 工作目录路径，如 /Users/zzh/code/foo
  * @returns 项目目录名，如 -Users-zzh-code-foo
  */
 function cwdToProjectDir(cwd: string): string {
-	return cwd.replace(/\//g, "-").replace(/^-/, "-");
+	return cwd.replace(/[\/_.]/g, "-").replace(/^-+/, "-");
+}
+
+/**
+ * 项目目录匹配缓存
+ * 避免重复扫描和计算
+ */
+const projectDirCache = new Map<string, string>();
+
+/**
+ * 生成多种可能的项目目录名（用于容错匹配）
+ * @param cwd 工作目录路径
+ * @returns 可能的目录名数组，按优先级排序
+ */
+function generateProjectDirVariants(cwd: string): string[] {
+	const variants: string[] = [];
+
+	// 规则1：正确的规则（替换 /、_、.）
+	variants.push(cwd.replace(/[\/_.]/g, "-").replace(/^-+/, "-"));
+
+	// 规则2：旧规则（只替换 /）
+	variants.push(cwd.replace(/\//g, "-").replace(/^-+/, "-"));
+
+	// 规则3：替换 / 和 _（不替换 .）
+	variants.push(cwd.replace(/[\/_ ]/g, "-").replace(/^-+/, "-"));
+
+	// 规则4：替换 / 和 .（不替换 _）
+	variants.push(cwd.replace(/[\/. ]/g, "-").replace(/^-+/, "-"));
+
+	// 去重
+	return [...new Set(variants)];
+}
+
+/**
+ * 在 projects 目录中查找最匹配的项目目录
+ * @param cwd 工作目录路径
+ * @returns 找到的项目目录名，未找到返回 null
+ */
+async function findBestMatchingProjectDir(cwd: string): Promise<string | null> {
+	// 检查缓存
+	if (projectDirCache.has(cwd)) {
+		return projectDirCache.get(cwd) || null;
+	}
+
+	const projectsDir = join(homedir(), ".claude", "projects");
+
+	try {
+		const allDirs = await readdir(projectsDir);
+		const variants = generateProjectDirVariants(cwd);
+
+		// 1. 精确匹配
+		for (const variant of variants) {
+			if (allDirs.includes(variant)) {
+				projectDirCache.set(cwd, variant);
+				return variant;
+			}
+		}
+
+		// 2. 模糊匹配：计算相似度
+		const cwdParts = cwd.split("/").filter(Boolean);
+		const scores = allDirs.map((dir) => {
+			const dirParts = dir.split("-").filter(Boolean);
+			let matchCount = 0;
+
+			for (const part of cwdParts) {
+				if (dirParts.some((dp) => dp.includes(part) || part.includes(dp))) {
+					matchCount++;
+				}
+			}
+
+			return { dir, score: matchCount / cwdParts.length };
+		});
+
+		// 选择相似度 > 0.7 的最佳匹配
+		scores.sort((a, b) => b.score - a.score);
+		if (scores[0] && scores[0].score > 0.7) {
+			projectDirCache.set(cwd, scores[0].dir);
+			return scores[0].dir;
+		}
+
+		return null;
+	} catch {
+		return null;
+	}
 }
 
 /**
@@ -46,8 +130,26 @@ export async function getSessionPath(
 	cwd: string,
 	startTime?: Date,
 ): Promise<string> {
-	const projectDir = cwdToProjectDir(cwd);
-	const sessionsDir = join(homedir(), ".claude", "projects", projectDir);
+	let projectDir = cwdToProjectDir(cwd);
+	let sessionsDir = join(homedir(), ".claude", "projects", projectDir);
+
+	// 容错：如果目录不存在，尝试模糊匹配
+	try {
+		await stat(sessionsDir);
+	} catch {
+		const matchedDir = await findBestMatchingProjectDir(cwd);
+		if (matchedDir) {
+			projectDir = matchedDir;
+			sessionsDir = join(homedir(), ".claude", "projects", projectDir);
+		}
+	}
+
+	// 调试日志
+	if (process.env.DEBUG_SESSION) {
+		console.error(`[DEBUG] Original projectDir: ${cwdToProjectDir(cwd)}`);
+		console.error(`[DEBUG] Matched projectDir: ${projectDir}`);
+		console.error(`[DEBUG] sessionsDir: ${sessionsDir}`);
+	}
 
 	try {
 		const files = await readdir(sessionsDir);
@@ -55,9 +157,6 @@ export async function getSessionPath(
 
 		// 调试日志
 		if (process.env.DEBUG_SESSION) {
-			console.error(`[DEBUG] cwd: ${cwd}`);
-			console.error(`[DEBUG] projectDir: ${projectDir}`);
-			console.error(`[DEBUG] sessionsDir: ${sessionsDir}`);
 			console.error(`[DEBUG] found ${jsonlFiles.length} jsonl files`);
 		}
 
