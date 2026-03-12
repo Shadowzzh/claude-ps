@@ -10,9 +10,6 @@
 	"files": ["dist"],
 	"scripts": {
 		"dev": "tsx src/index.tsx",
-		"dev:list": "tsx src/index.tsx --list",
-		"dev:sessions": "tsx src/index.tsx --sessions",
-		"dev:debug": "tsx src/index.tsx --debug",
 		"build": "tsup",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
@@ -24,13 +21,12 @@
 	"author": "ziheng",
 	"license": "MIT",
 	"dependencies": {
-		"chalk": "^5.3.0",
-		"chokidar": "^4.0.3",
+		"chalk": "^5.6.2",
+		"chokidar": "^5.0.0",
+		"commander": "^14.0.3",
 		"fullscreen-ink": "^0.1.0",
-		"ink": "^5.0.1",
-		"meow": "^13.2.0",
-		"p-limit": "^7.3.0",
-		"react": "^18.3.1"
+		"ink": "^6.8.0",
+		"react": "^19.2.4"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.0",
