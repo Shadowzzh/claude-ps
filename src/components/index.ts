@@ -2,6 +2,8 @@
 export { StatusBar } from "./ui/StatusBar";
 export { HelpBar } from "./ui/HelpBar";
 export { DetailPanel } from "./ui/DetailPanel";
+export { SessionList } from "./ui/SessionList";
+export { MessageDetail } from "./ui/MessageDetail";
 
 // UI 原语
 export {

@@ -19,6 +19,26 @@ export interface SessionMessage {
 	timestamp: string;
 }
 
+/** 会话文件信息 */
+export interface SessionFile {
+	/** 文件名（不含路径） */
+	fileName: string;
+	/** 完整路径 */
+	filePath: string;
+	/** 文件大小（字节） */
+	size: number;
+	/** 创建时间 */
+	birthtime: Date;
+	/** 最后修改时间 */
+	mtime: Date;
+	/** 消息总数 */
+	messageCount: number;
+	/** 最后一条消息时间 */
+	lastMessageTime: Date | null;
+	/** 最近的消息列表 */
+	recentMessages: SessionMessage[];
+}
+
 /** 增量读取结果 */
 export interface IncrementalMessages {
 	messages: SessionMessage[];
@@ -27,7 +47,8 @@ export interface IncrementalMessages {
 
 /** 包含会话消息的增强进程信息 */
 export interface EnrichedProcess extends ClaudeProcess {
-	messages: SessionMessage[];
+	/** 项目目录下的所有会话文件 */
+	sessionFiles: SessionFile[];
 }
 
 /** 排序字段类型 */

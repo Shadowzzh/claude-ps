@@ -2,7 +2,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import pLimit from "p-limit";
-import type { SessionMessage } from "../types";
+import type { SessionFile, SessionMessage } from "../types";
 import { FileCache } from "./cache";
 
 // 并发限制：最多同时进行 10 个文件 stat 操作
@@ -22,9 +22,146 @@ const sessionContentCache = new FileCache<string>({
 
 /**
  * 最大保留的消息数量
- * 超过此数量时，只保留最新的消息
+ * 超过此数量时,只保留最新的消息
  */
-const MAX_MESSAGES = 100;
+const MAX_MESSAGES = 500;
+
+/**
+ * 会话文件元数据
+ */
+interface SessionMetadata {
+	/** 第一条消息的时间戳（毫秒） */
+	firstMessageTime: number | null;
+	/** 最后一条消息的时间戳（毫秒） */
+	lastMessageTime: number | null;
+	/** 消息总数（不包括 file-history-snapshot 等元数据） */
+	messageCount: number;
+}
+
+/**
+ * 会话元数据缓存
+ */
+const metadataCache = new FileCache<SessionMetadata>({
+	maxSize: 50,
+	ttl: 5 * 60 * 1000, // 5 分钟
+	loader: async (path: string) => {
+		return getSessionMetadata(path);
+	},
+});
+
+/**
+ * 提取会话文件的元数据（消息时间戳和数量）
+ * 优化：只读取文件的前10行和后10行，避免读取整个文件
+ * @param filePath 会话文件路径
+ * @returns 会话元数据
+ */
+async function getSessionMetadata(filePath: string): Promise<SessionMetadata> {
+	try {
+		const content = await readFile(filePath, "utf-8");
+		const lines = content.trim().split("\n");
+
+		let firstMessageTime: number | null = null;
+		let lastMessageTime: number | null = null;
+		let messageCount = 0;
+
+		// 优化：只检查前10行和后10行
+		const linesToCheck =
+			lines.length <= 20 ? lines : [...lines.slice(0, 10), ...lines.slice(-10)];
+
+		for (const line of linesToCheck) {
+			try {
+				const entry = JSON.parse(line);
+				// 只统计用户和助手消息，忽略 file-history-snapshot 等元数据
+				if (entry.type === "user" || entry.type === "assistant") {
+					messageCount++;
+					if (entry.timestamp) {
+						const timestamp = new Date(entry.timestamp).getTime();
+						if (!firstMessageTime) {
+							firstMessageTime = timestamp;
+						}
+						lastMessageTime = timestamp;
+					}
+				}
+			} catch {
+				// 跳过无效行
+			}
+		}
+
+		return { firstMessageTime, lastMessageTime, messageCount };
+	} catch {
+		return { firstMessageTime: null, lastMessageTime: null, messageCount: 0 };
+	}
+}
+
+/**
+ * 计算文件的匹配置信度得分
+ * @param file 文件统计信息
+ * @param metadata 会话元数据
+ * @param processStartTime 进程启动时间（毫秒）
+ * @returns 置信度得分（0-100）
+ */
+function calculateConfidenceScore(
+	file: { birthtime: Date; mtimeMs: number; size: number },
+	metadata: SessionMetadata,
+	processStartTime: number,
+): number {
+	let score = 0;
+
+	// 判断是新建会话还是 resume 会话
+	const birthDiff = Math.abs(file.birthtime.getTime() - processStartTime);
+	const isNewSession = birthDiff < 600000; // 10分钟内创建的视为新会话
+
+	if (isNewSession) {
+		// 新建会话场景：创建时间权重更高（0-50分）
+		if (birthDiff < 60000)
+			score += 50; // 1分钟内：满分
+		else if (birthDiff < 300000)
+			score += 40; // 5分钟内：40分
+		else if (birthDiff < 600000) score += 30; // 10分钟内：30分
+
+		// 修改时间匹配度（0-20分）
+		const mtimeDiff = Math.abs(file.mtimeMs - processStartTime);
+		if (mtimeDiff < 60000)
+			score += 20; // 1分钟内：满分
+		else if (mtimeDiff < 300000)
+			score += 15; // 5分钟内：15分
+		else if (mtimeDiff < 600000) score += 10; // 10分钟内：10分
+	} else {
+		// Resume 会话场景：修改时间和内容活跃度权重更高
+		// 修改时间匹配度（0-50分）
+		const mtimeDiff = Math.abs(file.mtimeMs - processStartTime);
+		if (mtimeDiff < 60000)
+			score += 50; // 1分钟内：满分
+		else if (mtimeDiff < 300000)
+			score += 40; // 5分钟内：40分
+		else if (mtimeDiff < 600000)
+			score += 30; // 10分钟内：30分
+		else if (mtimeDiff < 1800000) score += 20; // 30分钟内：20分
+	}
+
+	// 内容活跃度（0-20分）
+	if (metadata.lastMessageTime) {
+		const lastMsgDiff = Math.abs(metadata.lastMessageTime - processStartTime);
+		if (lastMsgDiff < 60000)
+			score += 20; // 1分钟内：满分
+		else if (lastMsgDiff < 300000)
+			score += 15; // 5分钟内：15分
+		else if (lastMsgDiff < 600000)
+			score += 10; // 10分钟内：10分
+		else if (lastMsgDiff < 1800000) score += 5; // 30分钟内：5分
+	}
+
+	// 消息数量（0-10分）
+	if (metadata.messageCount > 10)
+		score += 10; // 有实质对话：满分
+	else if (metadata.messageCount > 5)
+		score += 7; // 有一些对话：7分
+	else if (metadata.messageCount > 0)
+		score += 3; // 有消息但很少：3分
+	else if (isNewSession && birthDiff < 60000) score += 5; // 新建会话且时间非常接近，即使没有消息也给一些分
+
+	return score;
+}
 
 /**
  * 将工作目录路径转换为 Claude 项目目录名
@@ -191,49 +328,73 @@ export async function getSessionPath(
 			}
 		}
 
-		// 如果提供了启动时间，尝试匹配
+		// 如果提供了启动时间，使用新的评分算法
 		if (startTime && fileStats.length > 0) {
 			const startMs = startTime.getTime();
 
-			// 策略1: 基于创建时间匹配（新建会话场景，放宽到 5 分钟容差）
-			const birthtimeThreshold = 300000; // 5 分钟
-			const birthtimeMatched = fileStats
-				.filter(
-					(f) => Math.abs(f.birthtime.getTime() - startMs) < birthtimeThreshold,
-				)
-				.sort((a, b) => b.mtimeMs - a.mtimeMs);
+			// 快速过滤：排除明显不符合的文件
+			const candidates = fileStats.filter((f) => {
+				// 过滤掉太小的文件（可能是空会话）
+				if (f.size < 1024) return false;
+				// 过滤掉创建时间远早于进程启动的文件（超过1天）
+				const birthDiff = f.birthtime.getTime() - startMs;
+				if (birthDiff < -86400000) return false; // 1天 = 86400000ms
+				return true;
+			});
 
-			if (birthtimeMatched.length > 0) {
+			if (candidates.length === 0) {
+				// 没有候选文件，返回空
 				if (process.env.DEBUG_SESSION) {
+					console.error("[DEBUG] no valid candidates after filtering");
+				}
+				return "";
+			}
+
+			// 获取所有候选文件的元数据并计算得分
+			const scored = await Promise.all(
+				candidates.map(async (file) => {
+					const metadata = await metadataCache.get(file.path);
+					const score = calculateConfidenceScore(file, metadata, startMs);
+					return { file, metadata, score };
+				}),
+			);
+
+			// 按得分排序
+			scored.sort((a, b) => b.score - a.score);
+
+			// 调试日志
+			if (process.env.DEBUG_SESSION) {
+				console.error("[DEBUG] Scored candidates:");
+				for (const { file, score, metadata } of scored) {
 					console.error(
-						`[DEBUG] matched by birthtime: ${birthtimeMatched[0].path}`,
+						`  ${file.path.split("/").pop()}: score=${score}, messages=${metadata.messageCount}`,
 					);
 				}
-				return birthtimeMatched[0].path;
 			}
 
-			// 策略2: 基于修改时间匹配（resume 会话场景，放宽到 10 分钟容差）
-			const mtimeThreshold = 600000; // 10 分钟
-			const mtimeMatched = fileStats
-				.filter((f) => {
-					const mtimeDiff = f.mtimeMs - startMs;
-					// 修改时间在启动时间前后都可以，只要在容差内
-					return Math.abs(mtimeDiff) < mtimeThreshold;
-				})
-				.sort(
-					(a, b) =>
-						Math.abs(a.mtimeMs - startMs) - Math.abs(b.mtimeMs - startMs),
-				); // 选择时间最接近的
+			// 选择得分最高的文件
+			const best = scored[0];
+			const confidenceThreshold = 30; // 置信度阈值（降低以支持更多场景）
 
-			if (mtimeMatched.length > 0) {
+			if (best && best.score >= confidenceThreshold) {
 				if (process.env.DEBUG_SESSION) {
-					console.error(`[DEBUG] matched by mtime: ${mtimeMatched[0].path}`);
+					console.error(
+						`[DEBUG] matched with score ${best.score}: ${best.file.path}`,
+					);
 				}
-				return mtimeMatched[0].path;
+				return best.file.path;
 			}
+
+			// 得分太低，不匹配
+			if (process.env.DEBUG_SESSION) {
+				console.error(
+					`[DEBUG] best score ${best?.score || 0} < ${confidenceThreshold}, no match`,
+				);
+			}
+			return "";
 		}
 
-		// 回退：返回最新修改的文件
+		// 没有提供启动时间，回退到最新修改的文件
 		fileStats.sort((a, b) => b.mtimeMs - a.mtimeMs);
 		if (process.env.DEBUG_SESSION && fileStats[0]) {
 			console.error(`[DEBUG] fallback to latest: ${fileStats[0].path}`);
@@ -395,11 +556,7 @@ export async function getAllMessages(
 			}
 		}
 
-		// 限制消息数量，只保留最新的 MAX_MESSAGES 条
-		const limitedMessages =
-			messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages;
-
-		return { messages: limitedMessages, lineCount: lines.length };
+		return { messages, lineCount: lines.length };
 	} catch {
 		return { messages: [], lineCount: 0 };
 	}
@@ -505,6 +662,68 @@ export function clearSessionCache(sessionPath: string): void {
  */
 export function clearAllSessionCache(): void {
 	sessionContentCache.clearAll();
+}
+
+/**
+ * 获取项目目录下的所有会话文件
+ * @param cwd 工作目录
+ * @returns 会话文件数组，按修改时间倒序排列
+ */
+export async function getAllSessionFiles(cwd: string): Promise<SessionFile[]> {
+	let projectDir = cwdToProjectDir(cwd);
+	let sessionsDir = join(homedir(), ".claude", "projects", projectDir);
+
+	// 容错：如果目录不存在，尝试模糊匹配
+	try {
+		await stat(sessionsDir);
+	} catch {
+		const matchedDir = await findBestMatchingProjectDir(cwd);
+		if (matchedDir) {
+			projectDir = matchedDir;
+			sessionsDir = join(homedir(), ".claude", "projects", projectDir);
+		} else {
+			return [];
+		}
+	}
+
+	try {
+		const files = await readdir(sessionsDir);
+		const jsonlFiles = files.filter((f) => f.endsWith(".jsonl"));
+
+		if (jsonlFiles.length === 0) return [];
+
+		// 并发获取所有文件的信息
+		const sessionFiles = await Promise.all(
+			jsonlFiles.map((fileName) =>
+				statLimit(async () => {
+					const filePath = join(sessionsDir, fileName);
+					const fileStat = await stat(filePath);
+					const metadata = await metadataCache.get(filePath);
+					const recentMessages = await getRecentMessages(filePath, 5);
+
+					return {
+						fileName,
+						filePath,
+						size: fileStat.size,
+						birthtime: fileStat.birthtime,
+						mtime: new Date(fileStat.mtimeMs),
+						messageCount: metadata.messageCount,
+						lastMessageTime: metadata.lastMessageTime
+							? new Date(metadata.lastMessageTime)
+							: null,
+						recentMessages,
+					};
+				}),
+			),
+		);
+
+		// 按修改时间倒序排列
+		sessionFiles.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+
+		return sessionFiles;
+	} catch {
+		return [];
+	}
 }
 
 /**

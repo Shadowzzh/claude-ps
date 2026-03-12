@@ -13,6 +13,8 @@ interface HelpBarProps {
 /** 快捷键提示配置 */
 const hints: Array<{ key: string; desc: string }> = [
 	{ key: "↑/↓", desc: "移动" },
+	{ key: "Tab", desc: "切换" },
+	{ key: "←/→", desc: "滚动" },
 	{ key: "d", desc: "终止" },
 	{ key: "D", desc: "强杀" },
 	{ key: "s", desc: "排序" },

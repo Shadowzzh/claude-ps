@@ -177,32 +177,38 @@ export async function getClaudeProcesses(): Promise<ClaudeProcess[]> {
 		batchGetProcessStats(pids),
 	]);
 
-	// 组装结果
-	const processes: ClaudeProcess[] = [];
-	for (const info of basicInfo) {
-		const cwd = cwdMap.get(info.pid) || "未知";
-		const stats = statsMap.get(info.pid) || {
-			cpu: 0,
-			memory: 0,
-			elapsed: "",
-		};
+	// 组装结果并获取会话路径
+	const { getSessionPath } = await import("./session");
+	const processes: ClaudeProcess[] = await Promise.all(
+		basicInfo.map(async (info) => {
+			const cwd = cwdMap.get(info.pid) || "未知";
+			const stats = statsMap.get(info.pid) || {
+				cpu: 0,
+				memory: 0,
+				elapsed: "",
+			};
 
-		const isOrphan = info.tty === "??" || info.tty === "?";
-		const isCurrent = currentTty !== "" && info.tty === currentTty;
+			const isOrphan = info.tty === "??" || info.tty === "?";
+			const isCurrent = currentTty !== "" && info.tty === currentTty;
+			const startTime = parseElapsedToDate(stats.elapsed);
 
-		processes.push({
-			pid: info.pid,
-			tty: info.tty,
-			cwd,
-			isCurrent,
-			isOrphan,
-			cpu: stats.cpu,
-			memory: stats.memory,
-			elapsed: stats.elapsed,
-			startTime: parseElapsedToDate(stats.elapsed),
-			sessionPath: "",
-		});
-	}
+			// 获取会话文件路径
+			const sessionPath = await getSessionPath(cwd, startTime);
+
+			return {
+				pid: info.pid,
+				tty: info.tty,
+				cwd,
+				isCurrent,
+				isOrphan,
+				cpu: stats.cpu,
+				memory: stats.memory,
+				elapsed: stats.elapsed,
+				startTime,
+				sessionPath,
+			};
+		}),
+	);
 
 	return processes;
 }

@@ -9,6 +9,7 @@ interface ProcessListProps {
 	selectedIndex: number;
 	loading: boolean;
 	leftWidth: number;
+	isFocused?: boolean;
 }
 
 /**
@@ -37,6 +38,7 @@ export function ProcessList({
 	selectedIndex,
 	loading,
 	leftWidth,
+	isFocused = true,
 }: ProcessListProps) {
 	if (loading) {
 		return <LoadingState message="加载中..." />;
