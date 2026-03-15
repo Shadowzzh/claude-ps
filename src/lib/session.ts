@@ -83,7 +83,7 @@ function getSessionIdFromHistory(projectPath: string): string | null {
 }
 
 /**
- * 从 history.jsonl 获取会话的第一条用户消息
+ * 从 history.jsonl 获取会话的最后一条用户消息
  */
 function getLastUserMessage(sessionId: string): string | null {
 	try {
@@ -95,8 +95,8 @@ function getLastUserMessage(sessionId: string): string | null {
 		const content = readFileSync(historyPath, "utf-8");
 		const lines = content.trim().split("\n");
 
-		// 从前往后查找匹配会话 ID 的第一条记录
-		for (let i = 0; i < lines.length; i++) {
+		// 从后往前查找匹配会话 ID 的最后一条记录
+		for (let i = lines.length - 1; i >= 0; i--) {
 			try {
 				const record = JSON.parse(lines[i]);
 				if (record.sessionId === sessionId && record.display) {
