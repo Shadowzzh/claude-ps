@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { Command } from "commander";
+import { detailCommand } from "./commands/detail.js";
 import { installCommand } from "./commands/install.js";
 import { listCommand } from "./commands/list.js";
 
@@ -29,6 +30,13 @@ export function createCli() {
 		.description("安装 hook 脚本到 ~/.claude/hooks/claude-ps")
 		.action(() => {
 			installCommand();
+		});
+
+	program
+		.command("detail [pid]")
+		.description("查看进程详细信息")
+		.action((pid) => {
+			detailCommand(pid);
 		});
 
 	return program;
