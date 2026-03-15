@@ -122,15 +122,65 @@ export function getSessionInfo(
 ): SessionInfo | null {
 	try {
 		const lastMessage = getLastUserMessage(sessionId);
+		const sessionFilePath = getSessionFilePath(projectPath, sessionId);
+
+		if (!existsSync(sessionFilePath)) {
+			return {
+				sessionId,
+				summary: lastMessage || "N/A",
+				messageCount: 0,
+				created: "",
+				modified: "",
+			};
+		}
+
+		const content = readFileSync(sessionFilePath, "utf-8");
+		const lines = content.trim().split("\n");
+
+		// 统计消息数（user 和 assistant 类型）
+		let messageCount = 0;
+		let created = "";
+		let modified = "";
+
+		for (const line of lines) {
+			try {
+				const record = JSON.parse(line);
+				if (record.type === "user" || record.type === "assistant") {
+					messageCount++;
+					if (!created && record.timestamp) {
+						created = record.timestamp;
+					}
+					if (record.timestamp) {
+						modified = record.timestamp;
+					}
+				}
+			} catch {
+				// ignore parse errors
+			}
+		}
 
 		return {
 			sessionId,
 			summary: lastMessage || "N/A",
-			messageCount: 0,
-			created: "",
-			modified: "",
+			messageCount,
+			created,
+			modified,
 		};
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * 获取会话文件路径
+ */
+function getSessionFilePath(projectPath: string, sessionId: string): string {
+	const projectKey = projectPath.replace(/\//g, "-");
+	return join(
+		homedir(),
+		".claude",
+		"projects",
+		projectKey,
+		`${sessionId}.jsonl`,
+	);
 }
