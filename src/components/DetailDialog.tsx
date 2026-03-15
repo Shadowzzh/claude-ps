@@ -40,6 +40,9 @@ export function DetailDialog({ proc, visible }: DetailDialogProps) {
 			<Text>
 				<Text bold>完整路径:</Text> {proc.cwd}
 			</Text>
+			<Text>
+				<Text bold>Claude 项目路径:</Text> {proc.claudeProjectPath}
+			</Text>
 
 			<Text dimColor> </Text>
 			<Text bold color="cyan">

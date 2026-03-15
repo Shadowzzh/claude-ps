@@ -28,7 +28,11 @@ export function useProcessManager() {
 	// 键盘事件
 	useInput((input, key) => {
 		if (showDetail) {
-			if (key.escape || input === "v") {
+			if (key.upArrow) {
+				setSelectedIndex((i) => (i - 1 + processes.length) % processes.length);
+			} else if (key.downArrow) {
+				setSelectedIndex((i) => (i + 1) % processes.length);
+			} else if (key.escape || input === "v") {
 				setShowDetail(false);
 			}
 			return;
@@ -49,9 +53,9 @@ export function useProcessManager() {
 		}
 
 		if (key.upArrow || input === "k") {
-			setSelectedIndex((i) => Math.max(0, i - 1));
+			setSelectedIndex((i) => (i - 1 + processes.length) % processes.length);
 		} else if (key.downArrow || input === "j") {
-			setSelectedIndex((i) => Math.min(processes.length - 1, i + 1));
+			setSelectedIndex((i) => (i + 1) % processes.length);
 		} else if (input === "v" && processes.length > 0) {
 			setShowDetail(true);
 		} else if (input === "d" && processes.length > 0) {

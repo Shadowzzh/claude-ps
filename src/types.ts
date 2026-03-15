@@ -14,5 +14,6 @@ export interface ProcessInfo {
 	cwd: string;
 	command: string;
 	projectName: string;
+	claudeProjectPath: string;
 	session?: SessionInfo;
 }

@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
-import { basename } from "node:path";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import type { ProcessInfo } from "../types.js";
 import { formatEtime } from "./format.js";
 import { getSessionIdFromProcess, getSessionInfo } from "./session.js";
@@ -48,6 +49,13 @@ export function getClaudeProcesses(): ProcessInfo[] {
 				const pidNum = Number.parseInt(pid, 10);
 				const cwd = getCwd(pidNum);
 				const projectName = basename(cwd);
+				const projectKey = cwd.replace(/\//g, "-");
+				const claudeProjectPath = join(
+					homedir(),
+					".claude",
+					"projects",
+					projectKey,
+				);
 
 				// 获取会话信息
 				const sessionId = getSessionIdFromProcess(pidNum, cwd);
@@ -63,6 +71,7 @@ export function getClaudeProcesses(): ProcessInfo[] {
 					cwd,
 					command,
 					projectName,
+					claudeProjectPath,
 					session,
 				};
 			});
