@@ -1,11 +1,11 @@
 {
-	"name": "claude-ps",
-	"version": "0.2.7",
-	"description": "TUI application for viewing and managing Claude Code processes",
+	"name": "claude-pm",
+	"version": "0.3.0",
+	"description": "Process manager for Claude Code with TUI and CLI interface",
 	"type": "module",
 	"main": "dist/index.js",
 	"bin": {
-		"claude-ps": "dist/index.js"
+		"claude-pm": "dist/index.js"
 	},
 	"files": ["dist"],
 	"scripts": {
