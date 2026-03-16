@@ -1,13 +1,12 @@
 import {
 	chmodSync,
-	copyFileSync,
 	existsSync,
 	mkdirSync,
 	readFileSync,
 	writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 interface Hook {
 	type: string;
@@ -27,9 +26,62 @@ interface Settings {
 	SessionEnd?: unknown;
 }
 
+const RECORD_SESSION_SCRIPT = `#!/bin/bash
+
+MAPPING_FILE="$HOME/.claude/session-mappings.jsonl"
+
+if ! command -v jq &> /dev/null; then
+    exit 0
+fi
+
+# Read stdin to get session info
+stdin_data=$(cat)
+session_id=$(echo "$stdin_data" | jq -r '.session_id // empty' 2>/dev/null)
+[ -z "$session_id" ] && exit 0
+
+find_claude_pid() {
+    local current_pid=$$
+    while [ "$current_pid" -ne 1 ] && [ -n "$current_pid" ]; do
+        local cmd=$(ps -o comm= -p "$current_pid" 2>/dev/null | tr -d ' ')
+        if [ "$cmd" = "claude" ]; then
+            echo "$current_pid"
+            return 0
+        fi
+        current_pid=$(ps -o ppid= -p "$current_pid" 2>/dev/null | tr -d ' ')
+    done
+    return 1
+}
+
+claude_pid=$(find_claude_pid)
+[ -z "$claude_pid" ] && exit 0
+
+mkdir -p "$(dirname "$MAPPING_FILE")"
+echo "{\\"pid\\":$claude_pid,\\"sessionId\\":\\"$session_id\\",\\"timestamp\\":$(date +%s)}" >> "$MAPPING_FILE"
+`;
+
+const CLEANUP_SESSION_SCRIPT = `#!/bin/bash
+
+MAPPING_FILE="$HOME/.claude/session-mappings.jsonl"
+
+if ! command -v jq &> /dev/null; then
+    exit 0
+fi
+
+[ ! -f "$MAPPING_FILE" ] && exit 0
+
+temp_file=$(mktemp)
+while IFS= read -r line; do
+    pid=$(echo "$line" | jq -r '.pid')
+    if ps -p "$pid" > /dev/null 2>&1; then
+        echo "$line" >> "$temp_file"
+    fi
+done < "$MAPPING_FILE"
+
+mv "$temp_file" "$MAPPING_FILE"
+`;
+
 export function installCommand() {
 	const targetDir = join(homedir(), ".claude", "hooks", "ccpeek");
-	const sourceDir = resolve(process.cwd(), "hooks");
 	const settingsFile = join(homedir(), ".claude", "settings.json");
 	const mappingFile = join(homedir(), ".claude", "session-mappings.jsonl");
 
@@ -42,13 +94,14 @@ export function installCommand() {
 		console.log("✓ 已清空旧的映射文件");
 	}
 
-	const scripts = ["record-session.sh", "cleanup-session.sh"];
+	const scripts = [
+		{ name: "record-session.sh", content: RECORD_SESSION_SCRIPT },
+		{ name: "cleanup-session.sh", content: CLEANUP_SESSION_SCRIPT },
+	];
 
-	for (const script of scripts) {
-		const source = join(sourceDir, script);
-		const target = join(targetDir, script);
-		copyFileSync(source, target);
-		chmodSync(target, 0o755);
+	for (const { name, content } of scripts) {
+		const target = join(targetDir, name);
+		writeFileSync(target, content, { mode: 0o755 });
 		console.log(`✓ 已安装: ${target}`);
 	}
 
