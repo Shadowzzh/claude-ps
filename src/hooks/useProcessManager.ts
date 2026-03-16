@@ -5,42 +5,54 @@ import type { ProcessInfo } from "../types.js";
 
 export function useProcessManager() {
 	const [processes, setProcesses] = useState<ProcessInfo[]>([]);
-	const [selectedIndex, setSelectedIndex] = useState(0);
+	const [selectedPid, setSelectedPid] = useState<number | null>(null);
 	const [showConfirm, setShowConfirm] = useState(false);
 	const [showDetail, setShowDetail] = useState(false);
 	const [showSession, setShowSession] = useState(false);
 	const { exit } = useApp();
 
+	const moveSelection = useCallback(
+		(direction: "up" | "down") => {
+			setSelectedPid((pid) => {
+				const idx = processes.findIndex((p) => p.pid === pid);
+				const offset = direction === "up" ? -1 : 1;
+				const newIdx = (idx + offset + processes.length) % processes.length;
+				return processes[newIdx]?.pid || pid;
+			});
+		},
+		[processes],
+	);
+
 	const loadProcesses = useCallback(() => {
 		const procs = getClaudeProcesses();
 		setProcesses(procs);
-		setSelectedIndex((prev) =>
-			prev >= procs.length && procs.length > 0 ? procs.length - 1 : prev,
-		);
+
+		setSelectedPid((prev) => {
+			if (!prev && procs.length > 0) return procs[0].pid;
+			if (procs.some((p) => p.pid === prev)) return prev;
+			return procs.length > 0 ? procs[0].pid : null;
+		});
 	}, []);
 
-	// 初始加载和自动刷新
 	useEffect(() => {
 		loadProcesses();
 		const interval = setInterval(loadProcesses, 3000);
 		return () => clearInterval(interval);
 	}, [loadProcesses]);
 
-	// 键盘事件
 	useInput((input, key) => {
 		if (showSession) {
 			if (key.escape || key.return) {
 				setShowSession(false);
 			}
-			// 让 SessionViewDialog 处理上下键
 			return;
 		}
 
 		if (showDetail) {
 			if (key.upArrow) {
-				setSelectedIndex((i) => (i - 1 + processes.length) % processes.length);
+				moveSelection("up");
 			} else if (key.downArrow) {
-				setSelectedIndex((i) => (i + 1) % processes.length);
+				moveSelection("down");
 			} else if (key.escape || input === "v") {
 				setShowDetail(false);
 			}
@@ -49,9 +61,8 @@ export function useProcessManager() {
 
 		if (showConfirm) {
 			if (input === "y" || input === "Y" || key.return) {
-				const proc = processes[selectedIndex];
-				if (proc) {
-					killProcess(proc.pid);
+				if (selectedPid) {
+					killProcess(selectedPid);
 					setTimeout(loadProcesses, 100);
 				}
 				setShowConfirm(false);
@@ -62,9 +73,9 @@ export function useProcessManager() {
 		}
 
 		if (key.upArrow || input === "k") {
-			setSelectedIndex((i) => (i - 1 + processes.length) % processes.length);
+			moveSelection("up");
 		} else if (key.downArrow || input === "j") {
-			setSelectedIndex((i) => (i + 1) % processes.length);
+			moveSelection("down");
 		} else if (key.return && processes.length > 0) {
 			setShowSession(true);
 		} else if (input === "v" && processes.length > 0) {
@@ -78,12 +89,19 @@ export function useProcessManager() {
 		}
 	});
 
+	const selectedIndex = processes.findIndex((p) => p.pid === selectedPid);
+
 	return {
 		processes,
-		selectedIndex,
+		selectedIndex: selectedIndex >= 0 ? selectedIndex : 0,
 		showConfirm,
 		showDetail,
 		showSession,
-		selectedProcess: processes[selectedIndex],
+		selectedPid: selectedPid || undefined,
+		closeDialog: useCallback(() => {
+			setShowSession(false);
+			setShowDetail(false);
+			setShowConfirm(false);
+		}, []),
 	};
 }

@@ -1,13 +1,16 @@
 import { Box, Text } from "ink";
 import type React from "react";
-import { useMemo } from "react";
-import { calculateStats, parseSessionMessages } from "../lib/sessionParser.js";
-import type { MessageContent, ProcessInfo, SessionMessage } from "../types.js";
+import { useEffect, useMemo } from "react";
+import { ProcessService, isProcessFound } from "../services/ProcessService.js";
+import type { MessageContent } from "../types.js";
 
 interface SessionViewDialogProps {
-	proc: ProcessInfo;
+	pid: number;
 	visible: boolean;
+	onClose: () => void;
 }
+
+const service = new ProcessService();
 
 function formatTime(isoString: string): string {
 	return new Date(isoString).toLocaleTimeString("zh-CN", {
@@ -86,20 +89,37 @@ function renderMessageContent(
 	return elements;
 }
 
-export function SessionViewDialog({ proc, visible }: SessionViewDialogProps) {
-	const messages = useMemo(() => {
-		if (!proc.session) return [];
-		return parseSessionMessages(proc.cwd, proc.session.sessionId);
-	}, [proc.cwd, proc.session]);
+export function SessionViewDialog({
+	pid,
+	visible,
+	onClose,
+}: SessionViewDialogProps) {
+	const result = useMemo(() => service.selectProcess(String(pid)), [pid]);
 
-	const stats = useMemo(() => calculateStats(messages), [messages]);
+	useEffect(() => {
+		if (!visible) return;
 
-	if (!visible || !proc.session) return null;
+		const interval = setInterval(() => {
+			const check = service.selectProcess(String(pid));
+			if (!isProcessFound(check)) {
+				onClose();
+			}
+		}, 1000);
+
+		return () => clearInterval(interval);
+	}, [pid, visible, onClose]);
+
+	if (!visible || !isProcessFound(result)) return null;
+
+	const sessionData = service.getSessionData(result.process);
+	if (!sessionData) return null;
+
+	const { messages, stats, session, projectName } = sessionData;
 
 	return (
 		<Box flexDirection="column" paddingY={1}>
 			<Text bold color="cyan">
-				会话对话 - {proc.session.summary.substring(0, 50)}
+				会话对话 - {session.summary.substring(0, 50)}
 			</Text>
 			<Text dimColor> </Text>
 

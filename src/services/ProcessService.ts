@@ -65,3 +65,9 @@ export class ProcessService {
 		process.kill(pid, "SIGTERM");
 	}
 }
+
+export function isProcessFound(
+	result: ProcessSelectionResult,
+): result is { process: ProcessInfo } {
+	return "process" in result;
+}

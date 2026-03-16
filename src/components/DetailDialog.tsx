@@ -1,14 +1,34 @@
 import { Box, Text } from "ink";
-import React from "react";
-import type { ProcessInfo } from "../types.js";
+import React, { useEffect, useMemo } from "react";
+import { ProcessService, isProcessFound } from "../services/ProcessService.js";
 
 interface DetailDialogProps {
-	proc: ProcessInfo;
+	pid: number;
 	visible: boolean;
+	onClose: () => void;
 }
 
-export function DetailDialog({ proc, visible }: DetailDialogProps) {
-	if (!visible) return null;
+const service = new ProcessService();
+
+export function DetailDialog({ pid, visible, onClose }: DetailDialogProps) {
+	const result = useMemo(() => service.selectProcess(String(pid)), [pid]);
+
+	useEffect(() => {
+		if (!visible) return;
+
+		const interval = setInterval(() => {
+			const check = service.selectProcess(String(pid));
+			if (!isProcessFound(check)) {
+				onClose();
+			}
+		}, 1000);
+
+		return () => clearInterval(interval);
+	}, [pid, visible, onClose]);
+
+	if (!visible || !isProcessFound(result)) return null;
+
+	const proc = result.process;
 
 	return (
 		<Box

@@ -14,8 +14,31 @@ export function App() {
 		showConfirm,
 		showDetail,
 		showSession,
-		selectedProcess,
+		selectedPid,
+		closeDialog,
 	} = useProcessManager();
+
+	let dialogContent = <HelpBar />;
+
+	if (showSession && selectedPid) {
+		dialogContent = (
+			<SessionViewDialog
+				pid={selectedPid}
+				visible={showSession}
+				onClose={closeDialog}
+			/>
+		);
+	} else if (showDetail && selectedPid) {
+		dialogContent = (
+			<DetailDialog
+				pid={selectedPid}
+				visible={showDetail}
+				onClose={closeDialog}
+			/>
+		);
+	} else if (showConfirm && selectedPid) {
+		dialogContent = <ConfirmDialog pid={selectedPid} visible={showConfirm} />;
+	}
 
 	return (
 		<Box flexDirection="column">
@@ -31,15 +54,7 @@ export function App() {
 
 			<Text dimColor> </Text>
 
-			{showSession && selectedProcess ? (
-				<SessionViewDialog proc={selectedProcess} visible={showSession} />
-			) : showDetail && selectedProcess ? (
-				<DetailDialog proc={selectedProcess} visible={showDetail} />
-			) : showConfirm && selectedProcess ? (
-				<ConfirmDialog pid={selectedProcess.pid} visible={showConfirm} />
-			) : (
-				<HelpBar />
-			)}
+			{dialogContent}
 		</Box>
 	);
 }
