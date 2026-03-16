@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import { padEndByWidth } from "../lib/format.js";
+import { padEndByWidth, truncateAndPad } from "../lib/format.js";
 import { getClaudeProcesses } from "../lib/process.js";
 
 export function listCommand(options: { json?: boolean }) {
@@ -27,9 +27,8 @@ export function listCommand(options: { json?: boolean }) {
 
 	// 进程列表
 	for (const proc of processes) {
-		const summary = proc.session?.summary || "N/A";
-		const truncated =
-			summary.length > 40 ? `${summary.slice(0, 37)}...` : summary;
+		const summary = (proc.session?.summary || "N/A").replace(/\s+/g, " ");
+		const truncated = truncateAndPad(summary, 40).trimEnd();
 		console.log(
 			`${padEndByWidth(String(proc.pid), 8)}${padEndByWidth(proc.cpu, 8)}${padEndByWidth(proc.mem, 8)}${padEndByWidth(proc.etime, 12)}${padEndByWidth(proc.projectName, 20)}${chalk.dim(truncated)}`,
 		);
