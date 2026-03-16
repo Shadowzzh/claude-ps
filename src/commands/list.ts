@@ -1,9 +1,10 @@
 import chalk from "chalk";
 import { padEndByWidth, truncateAndPad } from "../lib/format.js";
-import { getClaudeProcesses } from "../lib/process.js";
+import { ProcessService } from "../services/ProcessService.js";
 
 export function listCommand(options: { json?: boolean }) {
-	const processes = getClaudeProcesses();
+	const service = new ProcessService();
+	const processes = service.getAllProcesses();
 
 	if (options.json) {
 		console.log(JSON.stringify(processes, null, 2));

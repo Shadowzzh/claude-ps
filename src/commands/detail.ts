@@ -1,26 +1,30 @@
 import chalk from "chalk";
-import { getClaudeProcesses } from "../lib/process.js";
+import { ProcessService } from "../services/ProcessService.js";
+import type { ProcessInfo } from "../types.js";
 
 export function detailCommand(pid?: string) {
-	const processes = getClaudeProcesses();
+	const service = new ProcessService();
 
+	if (pid) {
+		const result = service.selectProcess(pid);
+		if ("error" in result) {
+			if (result.error === "NO_PROCESSES") {
+				console.log(chalk.yellow("未找到运行中的 Claude Code 进程"));
+			} else if (result.error === "PID_NOT_FOUND") {
+				console.log(chalk.red(`未找到 PID 为 ${result.pid} 的进程`));
+			}
+			return;
+		}
+		printProcessDetail(result.process);
+		return;
+	}
+
+	const processes = service.getAllProcesses();
 	if (processes.length === 0) {
 		console.log(chalk.yellow("未找到运行中的 Claude Code 进程"));
 		return;
 	}
 
-	// If PID provided, show only that process
-	if (pid) {
-		const proc = processes.find((p) => String(p.pid) === pid);
-		if (!proc) {
-			console.log(chalk.red(`未找到 PID 为 ${pid} 的进程`));
-			return;
-		}
-		printProcessDetail(proc);
-		return;
-	}
-
-	// Show all processes
 	for (const proc of processes) {
 		printProcessDetail(proc);
 		if (processes.indexOf(proc) < processes.length - 1) {
@@ -29,7 +33,7 @@ export function detailCommand(pid?: string) {
 	}
 }
 
-function printProcessDetail(proc: ReturnType<typeof getClaudeProcesses>[0]) {
+function printProcessDetail(proc: ProcessInfo) {
 	console.log(chalk.bold.cyan("\n进程详情"));
 	console.log();
 	console.log(`${chalk.bold("PID:")} ${proc.pid}`);

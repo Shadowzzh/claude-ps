@@ -1,6 +1,5 @@
 import chalk from "chalk";
-import { getClaudeProcesses } from "../lib/process.js";
-import { calculateStats, parseSessionMessages } from "../lib/sessionParser.js";
+import { ProcessService } from "../services/ProcessService.js";
 
 function formatTime(isoString: string): string {
 	return new Date(isoString).toLocaleTimeString("zh-CN", {
@@ -19,39 +18,32 @@ function formatDuration(start: string, end: string): string {
 }
 
 export function sessionCommand(pid?: string) {
-	const processes = getClaudeProcesses();
+	const service = new ProcessService();
+	const result = service.selectProcess(pid);
 
-	if (processes.length === 0) {
-		console.log(chalk.yellow("未找到运行中的 Claude Code 进程"));
-		return;
-	}
-
-	let proc: ReturnType<typeof getClaudeProcesses>[0] | undefined;
-	if (pid) {
-		proc = processes.find((p) => String(p.pid) === pid);
-		if (!proc) {
-			console.log(chalk.red(`未找到 PID 为 ${pid} 的进程`));
-			return;
-		}
-	} else if (processes.length === 1) {
-		proc = processes[0];
-	} else {
-		console.log(chalk.yellow("存在多个进程，请指定 PID:"));
-		for (const p of processes) {
-			console.log(`  ${p.pid} - ${p.projectName}`);
+	if ("error" in result) {
+		if (result.error === "NO_PROCESSES") {
+			console.log(chalk.yellow("未找到运行中的 Claude Code 进程"));
+		} else if (result.error === "PID_NOT_FOUND") {
+			console.log(chalk.red(`未找到 PID 为 ${result.pid} 的进程`));
+		} else if (result.error === "MULTIPLE_PROCESSES") {
+			console.log(chalk.yellow("存在多个进程，请指定 PID:"));
+			for (const p of result.processes) {
+				console.log(`  ${p.pid} - ${p.projectName}`);
+			}
 		}
 		return;
 	}
 
-	if (!proc.session) {
+	const sessionData = service.getSessionData(result.process);
+	if (!sessionData) {
 		console.log(chalk.yellow("该进程没有会话信息"));
 		return;
 	}
 
-	const messages = parseSessionMessages(proc.cwd, proc.session.sessionId);
-	const stats = calculateStats(messages);
+	const { messages, stats, session } = sessionData;
 
-	console.log(chalk.bold.cyan(`\n会话对话 - ${proc.session.summary}\n`));
+	console.log(chalk.bold.cyan(`\n会话对话 - ${session.summary}\n`));
 
 	// 统计信息
 	console.log(chalk.bold("统计信息:"));
