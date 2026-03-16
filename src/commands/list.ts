@@ -21,7 +21,7 @@ export function listCommand(options: { json?: boolean }) {
 	// 表头
 	console.log(
 		chalk.cyan(
-			`${padEndByWidth("PID", 8)}${padEndByWidth("CPU", 8)}${padEndByWidth("MEM", 8)}${padEndByWidth("运行时长", 12)}${padEndByWidth("项目名", 20)}会话`,
+			`${padEndByWidth("PID", 8)}${padEndByWidth("CPU", 8)}${padEndByWidth("MEM", 8)}${padEndByWidth("进程运行", 12)}${padEndByWidth("项目名", 20)}会话`,
 		),
 	);
 	console.log(chalk.gray("─".repeat(80)));

@@ -32,7 +32,7 @@ export function DetailDialog({ proc, visible }: DetailDialogProps) {
 				<Text bold>内存:</Text> {proc.mem}
 			</Text>
 			<Text>
-				<Text bold>运行时长:</Text> {proc.etime}
+				<Text bold>进程运行:</Text> {proc.etime}
 			</Text>
 			<Text>
 				<Text bold>项目名:</Text> {proc.projectName}

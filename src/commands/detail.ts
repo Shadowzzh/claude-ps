@@ -39,7 +39,7 @@ function printProcessDetail(proc: ProcessInfo) {
 	console.log(`${chalk.bold("PID:")} ${proc.pid}`);
 	console.log(`${chalk.bold("CPU:")} ${proc.cpu}`);
 	console.log(`${chalk.bold("内存:")} ${proc.mem}`);
-	console.log(`${chalk.bold("运行时长:")} ${proc.etime}`);
+	console.log(`${chalk.bold("进程运行:")} ${proc.etime}`);
 	console.log(`${chalk.bold("项目名:")} ${proc.projectName}`);
 	console.log(`${chalk.bold("完整路径:")} ${proc.cwd}`);
 

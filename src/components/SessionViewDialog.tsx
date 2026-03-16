@@ -46,19 +46,37 @@ function renderMessageContent(
 					</Text>,
 				);
 			} else if (item.type === "thinking" && showThinking && item.thinking) {
+				const thinkingText =
+					item.thinking.length > 100
+						? `${item.thinking.substring(0, 100)}...`
+						: item.thinking;
 				elements.push(
 					<Text
 						key={`thinking-${idx}-${item.thinking.substring(0, 20)}`}
 						color="yellow"
 					>
-						💭 {item.thinking.substring(0, 100)}
-						{item.thinking.length > 100 ? "..." : ""}
+						[THINKING] {thinkingText}
 					</Text>,
 				);
 			} else if (item.type === "tool_use" && showTools && item.name) {
+				const params = item.input
+					? ` ${JSON.stringify(item.input).substring(0, 100)}`
+					: "";
 				elements.push(
 					<Text key={`tool-${idx}-${item.name}`} color="cyan">
-						🔧 {item.name}
+						[TOOL] {item.name}
+						{params}
+					</Text>,
+				);
+			} else if (item.type === "tool_result" && showTools) {
+				const resultContent =
+					typeof item.content === "string"
+						? item.content.substring(0, 200)
+						: JSON.stringify(item.content).substring(0, 200);
+				elements.push(
+					<Text key={`result-${item.tool_use_id || idx}`} dimColor>
+						{resultContent}
+						{resultContent.length >= 200 ? "..." : ""}
 					</Text>,
 				);
 			}
@@ -107,7 +125,7 @@ export function SessionViewDialog({ proc, visible }: SessionViewDialogProps) {
 				</Text>
 				{stats.startTime && stats.endTime && (
 					<Text>
-						<Text bold>时长:</Text>{" "}
+						<Text bold>对话时长:</Text>{" "}
 						{formatDuration(stats.startTime, stats.endTime)}
 					</Text>
 				)}
@@ -133,16 +151,35 @@ export function SessionViewDialog({ proc, visible }: SessionViewDialogProps) {
 			<Text dimColor> </Text>
 
 			<Box flexDirection="column">
-				{messages.map((msg) => (
-					<Box key={msg.timestamp} flexDirection="column" marginBottom={1}>
-						<Text color={msg.type === "user" ? "green" : "blue"}>
-							[{msg.type === "user" ? "用户" : "AI"} {formatTime(msg.timestamp)}
-							]
-						</Text>
-						{msg.message?.content &&
-							renderMessageContent(msg.message.content, true, true)}
-					</Box>
-				))}
+				{messages.map((msg) => {
+					const isToolResult =
+						Array.isArray(msg.message?.content) &&
+						msg.message.content.some((item) => item.type === "tool_result");
+
+					let roleLabel: string;
+					let roleColor: string;
+
+					if (isToolResult) {
+						roleLabel = "TOOL_RESULT";
+						roleColor = "magenta";
+					} else if (msg.type === "user") {
+						roleLabel = "USER";
+						roleColor = "green";
+					} else {
+						roleLabel = "AI";
+						roleColor = "blue";
+					}
+
+					return (
+						<Box key={msg.timestamp} flexDirection="column" marginBottom={1}>
+							<Text color={roleColor}>
+								[{roleLabel}] {formatTime(msg.timestamp)}
+							</Text>
+							{msg.message?.content &&
+								renderMessageContent(msg.message.content, true, true)}
+						</Box>
+					);
+				})}
 			</Box>
 
 			<Text dimColor> </Text>

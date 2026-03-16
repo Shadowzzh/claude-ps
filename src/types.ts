@@ -55,7 +55,7 @@ export interface SessionMessage {
 /** 消息内容 */
 export interface MessageContent {
 	/** 内容类型 */
-	type: "text" | "tool_use" | "thinking";
+	type: "text" | "tool_use" | "thinking" | "tool_result";
 	/** 文本内容 */
 	text?: string;
 	/** 思考内容 */
@@ -64,6 +64,10 @@ export interface MessageContent {
 	name?: string;
 	/** 工具输入参数 */
 	input?: Record<string, unknown>;
+	/** 工具结果内容 */
+	content?: string | unknown;
+	/** 工具调用 ID */
+	tool_use_id?: string;
 }
 
 /** 会话统计信息 */

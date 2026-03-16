@@ -54,7 +54,9 @@ export function sessionCommand(pid?: string) {
 		`  Token: 输入 ${stats.totalInputTokens.toLocaleString()} / 输出 ${stats.totalOutputTokens.toLocaleString()}`,
 	);
 	if (stats.startTime && stats.endTime) {
-		console.log(`  时长: ${formatDuration(stats.startTime, stats.endTime)}`);
+		console.log(
+			`  对话时长: ${formatDuration(stats.startTime, stats.endTime)}`,
+		);
 	}
 	if (stats.thinkingCount > 0) {
 		console.log(`  思考: ${stats.thinkingCount} 次`);
@@ -71,8 +73,22 @@ export function sessionCommand(pid?: string) {
 
 	// 对话历史
 	for (const msg of messages) {
-		const role = msg.type === "user" ? chalk.green("用户") : chalk.blue("AI");
-		console.log(`[${role} ${formatTime(msg.timestamp)}]`);
+		// 检查是否为工具结果消息
+		const isToolResult =
+			Array.isArray(msg.message?.content) &&
+			msg.message.content.some((item) => item.type === "tool_result");
+
+		const roleLabel = isToolResult
+			? "TOOL_RESULT"
+			: msg.type === "user"
+				? "USER"
+				: "AI";
+		const roleColor = isToolResult
+			? chalk.magenta
+			: msg.type === "user"
+				? chalk.green
+				: chalk.blue;
+		console.log(roleColor(`[${roleLabel}] ${formatTime(msg.timestamp)}`));
 
 		if (typeof msg.message?.content === "string") {
 			console.log(msg.message.content);
@@ -83,11 +99,24 @@ export function sessionCommand(pid?: string) {
 				} else if (item.type === "thinking" && item.thinking) {
 					console.log(
 						chalk.yellow(
-							`💭 ${item.thinking.substring(0, 100)}${item.thinking.length > 100 ? "..." : ""}`,
+							`[THINKING] ${item.thinking.substring(0, 100)}${item.thinking.length > 100 ? "..." : ""}`,
 						),
 					);
 				} else if (item.type === "tool_use" && item.name) {
-					console.log(chalk.cyan(`🔧 ${item.name}`));
+					const params = item.input
+						? ` ${JSON.stringify(item.input).substring(0, 100)}`
+						: "";
+					console.log(chalk.cyan(`[TOOL] ${item.name}${params}`));
+				} else if (item.type === "tool_result") {
+					const resultContent =
+						typeof item.content === "string"
+							? item.content.substring(0, 200)
+							: JSON.stringify(item.content).substring(0, 200);
+					console.log(
+						chalk.gray(
+							resultContent + (resultContent.length >= 200 ? "..." : ""),
+						),
+					);
 				}
 			}
 		}
