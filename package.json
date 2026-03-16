@@ -1,13 +1,15 @@
 {
 	"name": "@zhangziheng/claude-peek",
-	"version": "0.3.2",
+	"version": "0.3.3",
 	"description": "Process manager for Claude Code with TUI and CLI interface",
 	"type": "module",
 	"main": "dist/index.js",
 	"bin": {
 		"ccpeek": "dist/index.js"
 	},
-	"files": ["dist"],
+	"files": [
+		"dist"
+	],
 	"scripts": {
 		"dev": "tsx src/index.ts",
 		"build": "tsup",
@@ -17,7 +19,12 @@
 		"typecheck": "tsc --noEmit",
 		"all": "pnpm format && pnpm typecheck && pnpm lint"
 	},
-	"keywords": ["claude", "tui", "terminal", "process-manager"],
+	"keywords": [
+		"claude",
+		"tui",
+		"terminal",
+		"process-manager"
+	],
 	"author": "ziheng",
 	"license": "MIT",
 	"dependencies": {
