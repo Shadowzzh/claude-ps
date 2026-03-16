@@ -40,6 +40,8 @@ export interface SessionMessage {
 	type: "user" | "assistant";
 	/** 时间戳 */
 	timestamp: string;
+	/** 消息唯一标识 */
+	uuid?: string;
 	message?: {
 		/** 消息内容 */
 		content: string | MessageContent[];

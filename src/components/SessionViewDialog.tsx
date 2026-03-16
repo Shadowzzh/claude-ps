@@ -97,23 +97,13 @@ export function SessionViewDialog({ proc, visible }: SessionViewDialogProps) {
 	if (!visible || !proc.session) return null;
 
 	return (
-		<Box
-			flexDirection="column"
-			borderStyle="round"
-			borderColor="cyan"
-			padding={1}
-		>
+		<Box flexDirection="column" paddingY={1}>
 			<Text bold color="cyan">
 				会话对话 - {proc.session.summary.substring(0, 50)}
 			</Text>
 			<Text dimColor> </Text>
 
-			<Box
-				flexDirection="column"
-				borderStyle="single"
-				borderColor="gray"
-				paddingX={1}
-			>
+			<Box flexDirection="column">
 				<Text>
 					<Text bold>消息:</Text> {stats.totalMessages} (用户:{" "}
 					{stats.userMessages}, AI: {stats.assistantMessages})
@@ -172,7 +162,7 @@ export function SessionViewDialog({ proc, visible }: SessionViewDialogProps) {
 
 					return (
 						<Box
-							key={`${msg.timestamp}-${idx}`}
+							key={msg.uuid || `${msg.timestamp}-${idx}`}
 							flexDirection="column"
 							marginBottom={1}
 						>

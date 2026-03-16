@@ -11,7 +11,7 @@ export function TableCell({ width, isSelected, children }: TableCellProps) {
 	return (
 		<Box width={width} flexShrink={0}>
 			<Text
-				backgroundColor={isSelected ? "blue" : undefined}
+				backgroundColor={isSelected ? "cyan" : undefined}
 				color={isSelected ? "white" : undefined}
 			>
 				{children}

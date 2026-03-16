@@ -19,8 +19,10 @@ export function App() {
 
 	return (
 		<Box flexDirection="column">
+			<Text dimColor> </Text>
+
 			<Text bold color="cyan">
-				Claude Code 进程管理器
+				Claude Code Peek
 			</Text>
 
 			<Text dimColor> </Text>
