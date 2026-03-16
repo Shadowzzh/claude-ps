@@ -16,7 +16,7 @@
 ## 安装
 
 ```bash
-npm install -g ccpeek
+npm install -g  @zhangziheng/claude-peek
 ccpeek setup  # 安装 Claude Code Hook 脚本
 ```
 
