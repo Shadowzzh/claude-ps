@@ -1,6 +1,6 @@
 {
 	"name": "@zhangziheng/claude-peek",
-	"version": "0.3.10",
+	"version": "0.3.11",
 	"description": "Process manager for Claude Code with TUI and CLI interface",
 	"type": "module",
 	"main": "dist/index.js",
