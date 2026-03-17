@@ -9,6 +9,7 @@ export function useProcessManager() {
 	const [showConfirm, setShowConfirm] = useState(false);
 	const [showDetail, setShowDetail] = useState(false);
 	const [showSession, setShowSession] = useState(false);
+	const [showCopySuccess, setShowCopySuccess] = useState(false);
 	const { exit } = useApp();
 
 	const moveSelection = useCallback(
@@ -44,6 +45,9 @@ export function useProcessManager() {
 		if (showSession) {
 			if (key.escape || key.return) {
 				setShowSession(false);
+			} else if (input === "c") {
+				setShowCopySuccess(true);
+				setTimeout(() => setShowCopySuccess(false), 2000);
 			}
 			return;
 		}
@@ -97,6 +101,7 @@ export function useProcessManager() {
 		showConfirm,
 		showDetail,
 		showSession,
+		showCopySuccess,
 		selectedPid: selectedPid || undefined,
 		closeDialog: useCallback(() => {
 			setShowSession(false);

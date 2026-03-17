@@ -64,6 +64,76 @@ export class ProcessService {
 	killProcess(pid: number): void {
 		process.kill(pid, "SIGTERM");
 	}
+
+	generateMarkdown(sessionData: SessionData): string {
+		const { messages, stats, session, projectName } = sessionData;
+
+		let md = "# Claude Code 会话记录\n\n";
+		md += `**会话摘要**: ${session.summary}\n`;
+		md += `**项目**: ${projectName}\n`;
+
+		if (stats.startTime && stats.endTime) {
+			const duration =
+				new Date(stats.endTime).getTime() - new Date(stats.startTime).getTime();
+			const minutes = Math.floor(duration / 60000);
+			const seconds = Math.floor((duration % 60000) / 1000);
+			md += `**会话时长**: ${minutes} 分 ${seconds} 秒\n`;
+		}
+
+		md += "\n## 统计信息\n\n";
+		md += `- 消息总数: ${stats.totalMessages} (用户: ${stats.userMessages}, AI: ${stats.assistantMessages})\n`;
+		md += `- Token: 输入 ${stats.totalInputTokens.toLocaleString()} / 输出 ${stats.totalOutputTokens.toLocaleString()}\n`;
+
+		if (stats.thinkingCount > 0) {
+			md += `- 思考次数: ${stats.thinkingCount}\n`;
+		}
+
+		if (Object.keys(stats.toolCalls).length > 0) {
+			const toolsStr = Object.entries(stats.toolCalls)
+				.map(([name, count]) => `${name}(${count})`)
+				.join(", ");
+			md += `- 工具调用: ${toolsStr}\n`;
+		}
+
+		md += "\n## 对话历史\n\n";
+
+		for (const msg of messages) {
+			const time = new Date(msg.timestamp).toLocaleTimeString("zh-CN", {
+				hour: "2-digit",
+				minute: "2-digit",
+				second: "2-digit",
+				hour12: false,
+			});
+
+			const role = msg.type === "user" ? "USER" : "AI";
+			md += `### [${role}] ${time}\n\n`;
+
+			if (typeof msg.message?.content === "string") {
+				md += `${msg.message.content}\n\n`;
+			} else if (Array.isArray(msg.message?.content)) {
+				for (const item of msg.message.content) {
+					if (item.type === "text" && item.text) {
+						md += `${item.text}\n\n`;
+					} else if (item.type === "thinking" && item.thinking) {
+						md += `**[THINKING]**\n\`\`\`\n${item.thinking}\n\`\`\`\n\n`;
+					} else if (item.type === "tool_use" && item.name) {
+						md += `**[TOOL]** ${item.name}\n`;
+						if (item.input) {
+							md += `\`\`\`json\n${JSON.stringify(item.input, null, 2)}\n\`\`\`\n\n`;
+						}
+					} else if (item.type === "tool_result") {
+						const content =
+							typeof item.content === "string"
+								? item.content
+								: JSON.stringify(item.content, null, 2);
+						md += `**[TOOL_RESULT]**\n\`\`\`\n${content}\n\`\`\`\n\n`;
+					}
+				}
+			}
+		}
+
+		return md;
+	}
 }
 
 export function isProcessFound(

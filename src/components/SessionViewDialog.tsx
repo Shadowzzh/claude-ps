@@ -1,3 +1,4 @@
+import clipboard from "clipboardy";
 import { Box, Text } from "ink";
 import type React from "react";
 import { useEffect, useMemo } from "react";
@@ -8,6 +9,7 @@ interface SessionViewDialogProps {
 	pid: number;
 	visible: boolean;
 	onClose: () => void;
+	showCopySuccess?: boolean;
 }
 
 const service = new ProcessService();
@@ -93,6 +95,7 @@ export function SessionViewDialog({
 	pid,
 	visible,
 	onClose,
+	showCopySuccess = false,
 }: SessionViewDialogProps) {
 	const result = useMemo(() => service.selectProcess(String(pid)), [pid]);
 
@@ -108,6 +111,16 @@ export function SessionViewDialog({
 
 		return () => clearInterval(interval);
 	}, [pid, visible, onClose]);
+
+	useEffect(() => {
+		if (!showCopySuccess || !visible || !isProcessFound(result)) return;
+
+		const sessionData = service.getSessionData(result.process);
+		if (sessionData) {
+			const markdown = service.generateMarkdown(sessionData);
+			clipboard.write(markdown).catch(() => {});
+		}
+	}, [showCopySuccess, visible, result]);
 
 	if (!visible || !isProcessFound(result)) return null;
 
@@ -197,7 +210,8 @@ export function SessionViewDialog({
 			</Box>
 
 			<Text dimColor> </Text>
-			<Text dimColor>按 ESC 或 Enter 关闭</Text>
+			<Text dimColor>按 ESC 或 Enter 关闭 | 按 c 复制为 Markdown</Text>
+			{showCopySuccess && <Text color="green">✓ 已复制到剪贴板</Text>}
 		</Box>
 	);
 }

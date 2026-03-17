@@ -14,6 +14,7 @@ export function App() {
 		showConfirm,
 		showDetail,
 		showSession,
+		showCopySuccess,
 		selectedPid,
 		closeDialog,
 	} = useProcessManager();
@@ -26,6 +27,7 @@ export function App() {
 				pid={selectedPid}
 				visible={showSession}
 				onClose={closeDialog}
+				showCopySuccess={showCopySuccess}
 			/>
 		);
 	} else if (showDetail && selectedPid) {
