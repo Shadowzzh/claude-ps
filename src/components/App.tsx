@@ -43,19 +43,9 @@ export function App() {
 	}
 
 	return (
-		<Box flexDirection="column">
-			<Text dimColor> </Text>
-
-			<Text bold color="cyan">
-				Claude Code Peek
-			</Text>
-
-			<Text dimColor> </Text>
-
+		<Box flexDirection="column" paddingX={1}>
 			<ProcessList processes={processes} selectedIndex={selectedIndex} />
-
 			<Text dimColor> </Text>
-
 			{dialogContent}
 		</Box>
 	);
