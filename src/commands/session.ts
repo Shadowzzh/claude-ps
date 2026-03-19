@@ -25,11 +25,11 @@ export function sessionCommand(pid?: string) {
 		if (result.error === "NO_PROCESSES") {
 			console.log(chalk.yellow("未找到运行中的 Claude Code 进程"));
 		} else if (result.error === "PID_NOT_FOUND") {
-			console.log(chalk.red(`未找到 PID 为 ${result.pid} 的进程`));
+			console.log(chalk.red(`未找到匹配 "${result.pid}" 的进程`));
 		} else if (result.error === "MULTIPLE_PROCESSES") {
-			console.log(chalk.yellow("存在多个进程，请指定 PID:"));
+			console.log(chalk.yellow("存在多个进程，请指定 PID 或路径:"));
 			for (const p of result.processes) {
-				console.log(`  ${p.pid} - ${p.projectName}`);
+				console.log(`  ${p.pid} - ${p.cwd}`);
 			}
 		}
 		return;

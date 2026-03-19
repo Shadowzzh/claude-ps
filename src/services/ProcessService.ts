@@ -28,16 +28,25 @@ export class ProcessService {
 		return getClaudeProcesses();
 	}
 
-	selectProcess(pid?: string): ProcessSelectionResult {
+	selectProcess(input?: string): ProcessSelectionResult {
 		const processes = this.getAllProcesses();
 
 		if (processes.length === 0) {
 			return { error: "NO_PROCESSES" };
 		}
 
-		if (pid) {
-			const proc = processes.find((p) => String(p.pid) === pid);
-			return proc ? { process: proc } : { error: "PID_NOT_FOUND", pid };
+		if (input) {
+			// 1. Try as PID
+			const byPid = processes.find((p) => String(p.pid) === input);
+			if (byPid) return { process: byPid };
+
+			// 2. Try as exact path match (cwd or claudeProjectPath)
+			const byPath = processes.find(
+				(p) => p.cwd === input || p.claudeProjectPath === input,
+			);
+			if (byPath) return { process: byPath };
+
+			return { error: "PID_NOT_FOUND", pid: input };
 		}
 
 		if (processes.length === 1) {

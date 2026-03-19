@@ -35,10 +35,10 @@ export function createCli() {
 		});
 
 	program
-		.command("messages <pid>")
-		.description("查看会话对话详情")
-		.action((pid) => {
-			sessionCommand(pid);
+		.command("messages <pid-or-path>")
+		.description("查看会话对话详情 (支持 PID 或项目路径)")
+		.action((input) => {
+			sessionCommand(input);
 		});
 
 	program
