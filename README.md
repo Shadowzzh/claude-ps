@@ -59,10 +59,39 @@ ccpeek
 ```bash
 ccpeek list              # 列出所有进程
 ccpeek list --json       # JSON 输出
-ccpeek detail <pid>      # 查看进程详情
-ccpeek session <pid>     # 查看会话对话
+ccpeek show <pid>        # 查看进程详情
+ccpeek messages <pid>    # 查看会话对话
 ccpeek kill <pid>        # 杀掉进程
 ```
+
+### 远程主机
+
+查看和管理远程服务器上的 Claude Code 进程：
+
+```bash
+# 配置远程主机
+mkdir -p ~/.ccpeek
+cat > ~/.ccpeek/config.json << EOF
+{
+  "hosts": {
+    "dev": "user@dev.example.com",
+    "prod": "deploy@prod.example.com"
+  }
+}
+EOF
+
+# 查看配置的主机
+ccpeek hosts
+
+# 查看远程主机进程
+ccpeek list --host dev
+ccpeek show <pid> --host dev
+ccpeek messages <pid> --host dev
+```
+
+**前提条件**：
+- 远程主机已安装 `ccpeek`
+- 已配置 SSH 免密登录（推荐使用 `~/.ssh/config`）
 
 ## 工作原理
 
