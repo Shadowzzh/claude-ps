@@ -35,13 +35,13 @@ export function createCli() {
 		});
 
 	program
-		.command("messages <pid-or-path>")
-		.description("查看会话对话详情 (支持 PID 或项目路径)")
+		.command("messages <pid-or-path> [sessionId]")
+		.description("查看会话对话详情 (支持 PID、项目路径或项目路径+历史会话ID)")
 		.option("--md", "以 Markdown 格式输出到 stdout")
 		.option("--save [file]", "保存为 Markdown 文件")
 		.option("--copy", "复制 Markdown 到剪贴板")
-		.action((input, options) => {
-			sessionCommand(input, options);
+		.action((input, sessionId, options) => {
+			sessionCommand(input, { ...options, sessionId });
 		});
 
 	program

@@ -64,15 +64,22 @@ ccpeek messages <pid>    # 查看会话对话 (支持 PID 或项目路径)
 ccpeek kill <pid>        # 杀掉进程
 ```
 
-**messages 支持两种输入方式：**
+**messages 支持多种输入方式：**
 
 ```bash
-# 方式 1: 使用 PID
+# 方式 1: 使用 PID（运行中的进程）
 ccpeek messages 12345
 
-# 方式 2: 使用项目完整路径
+# 方式 2: 使用项目路径（运行中或历史会话）
 ccpeek messages /path/to/project
+
+# 方式 3: 指定历史会话 ID
+ccpeek messages /path/to/project abc123-session-id
 ```
+
+**历史会话支持：**
+
+即使 Claude Code 进程已经结束，仍然可以通过项目路径查看历史会话记录。默认显示最新的会话，也可指定会话 ID（支持前缀匹配）。
 
 **messages 输出选项：**
 

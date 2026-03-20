@@ -1,6 +1,9 @@
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import { getClaudeProcesses } from "../lib/process.js";
 import { calculateStats, parseSessionMessages } from "../lib/sessionParser.js";
-import type { ProcessInfo } from "../types.js";
+import type { HistorySession, ProcessInfo, SessionInfo } from "../types.js";
 
 export type ProcessSelectionResult =
 	| { process: ProcessInfo }
@@ -72,6 +75,172 @@ export class ProcessService {
 
 	killProcess(pid: number): void {
 		process.kill(pid, "SIGTERM");
+	}
+
+	/**
+	 * Get project directory path from project path
+	 */
+	#getProjectDir(projectPath: string): string | null {
+		const projectKey = projectPath.replace(/\//g, "-");
+		const projectDir = join(homedir(), ".claude", "projects", projectKey);
+		if (!existsSync(projectDir)) {
+			return null;
+		}
+		return projectDir;
+	}
+
+	/**
+	 * Get all history sessions for a project
+	 * Returns sessions sorted by modified time (newest first)
+	 */
+	getHistorySessions(projectPath: string): HistorySession[] | null {
+		const projectDir = this.#getProjectDir(projectPath);
+		if (!projectDir) {
+			return null;
+		}
+
+		try {
+			const entries = readdirSync(projectDir, { withFileTypes: true });
+			const sessions: HistorySession[] = [];
+
+			for (const entry of entries) {
+				// Only process .jsonl files (session files)
+				if (!entry.isFile() || !entry.name.endsWith(".jsonl")) {
+					continue;
+				}
+
+				const sessionId = entry.name.slice(0, -6); // Remove .jsonl extension
+				const filePath = join(projectDir, entry.name);
+				const stats = statSync(filePath);
+
+				// Parse session file to get message count and summary
+				const sessionInfo = this.#parseSessionFile(filePath, sessionId);
+				if (sessionInfo) {
+					sessions.push({
+						id: sessionId,
+						summary: sessionInfo.summary,
+						messageCount: sessionInfo.messageCount,
+						created: sessionInfo.created,
+						modified: stats.mtime.toISOString(),
+						filePath,
+					});
+				}
+			}
+
+			// Sort by modified time (newest first)
+			sessions.sort((a, b) => b.modified.localeCompare(a.modified));
+
+			return sessions;
+		} catch {
+			return null;
+		}
+	}
+
+	/**
+	 * Parse session file to get basic info
+	 */
+	#parseSessionFile(
+		filePath: string,
+		sessionId: string,
+	): {
+		summary: string;
+		messageCount: number;
+		created: string;
+	} | null {
+		try {
+			const content = readFileSync(filePath, "utf-8");
+			const lines = content.trim().split("\n");
+
+			let messageCount = 0;
+			let created = "";
+			let lastUserMessage = "";
+
+			for (const line of lines) {
+				try {
+					const record = JSON.parse(line);
+					if (record.type === "user" || record.type === "assistant") {
+						messageCount++;
+						if (!created && record.timestamp) {
+							created = record.timestamp;
+						}
+						if (record.type === "user" && record.message?.content) {
+							const content =
+								typeof record.message.content === "string"
+									? record.message.content
+									: record.message.content
+											.filter(
+												(item: unknown) =>
+													typeof item === "object" &&
+													item &&
+													"type" in item &&
+													item.type === "text" &&
+													"text" in item,
+											)
+											.map((item: unknown) => (item as { text: string }).text)
+											.join("") || "";
+							if (content) {
+								lastUserMessage = content;
+							}
+						}
+					}
+				} catch {
+					// Ignore parse errors
+				}
+			}
+
+			return {
+				summary:
+					lastUserMessage.substring(0, 50) +
+					(lastUserMessage.length > 50 ? "..." : ""),
+				messageCount,
+				created,
+			};
+		} catch {
+			return null;
+		}
+	}
+
+	/**
+	 * Get history session data by session ID
+	 */
+	getHistorySessionData(
+		projectPath: string,
+		sessionId: string,
+	): SessionData | null {
+		const projectDir = this.#getProjectDir(projectPath);
+		if (!projectDir) {
+			return null;
+		}
+
+		const sessionFilePath = join(projectDir, `${sessionId}.jsonl`);
+		if (!existsSync(sessionFilePath)) {
+			return null;
+		}
+
+		// Parse session file to get summary
+		const sessionInfo = this.#parseSessionFile(sessionFilePath, sessionId);
+		if (!sessionInfo) {
+			return null;
+		}
+
+		// Parse messages and calculate stats
+		const messages = parseSessionMessages(projectPath, sessionId);
+		const stats = calculateStats(messages);
+
+		const projectName = basename(projectPath);
+
+		return {
+			messages,
+			stats,
+			session: {
+				sessionId,
+				summary: sessionInfo.summary,
+				messageCount: sessionInfo.messageCount,
+				created: sessionInfo.created,
+				modified: statSync(sessionFilePath).mtime.toISOString(),
+			},
+			projectName,
+		};
 	}
 
 	generateMarkdown(sessionData: SessionData): string {

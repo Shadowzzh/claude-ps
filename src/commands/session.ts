@@ -1,13 +1,25 @@
 import { existsSync, mkdirSync } from "node:fs";
+import { basename } from "node:path";
 import chalk from "chalk";
 import clipboardy from "clipboardy";
 import { ProcessService } from "../services/ProcessService.js";
+import type { SessionData } from "../services/ProcessService.js";
 
 function formatTime(isoString: string): string {
 	return new Date(isoString).toLocaleTimeString("zh-CN", {
 		hour: "2-digit",
 		minute: "2-digit",
 		second: "2-digit",
+		hour12: false,
+	});
+}
+
+function formatDate(isoString: string): string {
+	return new Date(isoString).toLocaleString("zh-CN", {
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
 		hour12: false,
 	});
 }
@@ -25,42 +37,19 @@ interface SessionOptions {
 	copy?: boolean;
 }
 
-export function sessionCommand(pid?: string, options: SessionOptions = {}) {
-	// Ensure at most one output option is used
-	const outputModes = [
-		options.md && "md",
-		options.save && "save",
-		options.copy && "copy",
-	].filter(Boolean);
+interface SessionCommandOptions extends SessionOptions {
+	sessionId?: string;
+}
 
-	if (outputModes.length > 1) {
-		console.log(chalk.red("错误: --md, --save, --copy 不能同时使用"));
-		return;
-	}
-	const service = new ProcessService();
-	const result = service.selectProcess(pid);
-
-	if ("error" in result) {
-		if (result.error === "NO_PROCESSES") {
-			console.log(chalk.yellow("未找到运行中的 Claude Code 进程"));
-		} else if (result.error === "PID_NOT_FOUND") {
-			console.log(chalk.red(`未找到匹配 "${result.pid}" 的进程`));
-		} else if (result.error === "MULTIPLE_PROCESSES") {
-			console.log(chalk.yellow("存在多个进程，请指定 PID 或路径:"));
-			for (const p of result.processes) {
-				console.log(`  ${p.pid} - ${p.cwd}`);
-			}
-		}
-		return;
-	}
-
-	const sessionData = service.getSessionData(result.process);
-	if (!sessionData) {
-		console.log(chalk.yellow("该进程没有会话信息"));
-		return;
-	}
-
-	const { messages, stats, session } = sessionData;
+/**
+ * Display session data (common logic for running and history sessions)
+ */
+function displaySessionData(
+	sessionData: SessionData,
+	source: { pid?: number; sourceType: "running" | "history" },
+	options: SessionOptions,
+): void {
+	const { messages, stats, session, projectName } = sessionData;
 
 	// Output modes: md, save, copy
 	const outputMode = options.md
@@ -70,6 +59,8 @@ export function sessionCommand(pid?: string, options: SessionOptions = {}) {
 			: options.copy
 				? "copy"
 				: null;
+
+	const service = new ProcessService();
 
 	if (outputMode) {
 		const markdown = service.generateMarkdown(sessionData);
@@ -83,7 +74,7 @@ export function sessionCommand(pid?: string, options: SessionOptions = {}) {
 			const filePath =
 				typeof options.save === "string"
 					? options.save
-					: `/tmp/ccpeek_session_${result.process.pid}_${Date.now()}.md`;
+					: `/tmp/ccpeek_session_${source.pid ?? session.sessionId}_${Date.now()}.md`;
 
 			// Ensure parent directory exists
 			const dir = filePath.substring(0, filePath.lastIndexOf("/"));
@@ -118,7 +109,13 @@ export function sessionCommand(pid?: string, options: SessionOptions = {}) {
 	}
 
 	// Default: terminal output
-	console.log(chalk.bold.cyan(`\n会话对话 - ${session.summary}\n`));
+	const sourceLabel =
+		source.sourceType === "running"
+			? chalk.gray(`[运行中 PID:${source.pid}]`)
+			: chalk.gray("[历史会话]");
+	console.log(
+		chalk.bold.cyan(`\n会话对话 - ${session.summary} ${sourceLabel}\n`),
+	);
 
 	// 统计信息
 	console.log(chalk.bold("统计信息:"));
@@ -196,5 +193,122 @@ export function sessionCommand(pid?: string, options: SessionOptions = {}) {
 			}
 		}
 		console.log();
+	}
+}
+
+/**
+ * Show history sessions list
+ */
+function showHistorySessions(
+	projectPath: string,
+	sessions: ReturnType<ProcessService["getHistorySessions"]>,
+): void {
+	if (!sessions || sessions.length === 0) {
+		console.log(chalk.yellow("该项目没有历史会话"));
+		return;
+	}
+
+	console.log(chalk.bold(`\n历史会话 - ${basename(projectPath)}\n`));
+	for (let i = 0; i < sessions.length; i++) {
+		const s = sessions[i];
+		const num = chalk.cyan((i + 1).toString().padStart(2, " "));
+		const modified = chalk.gray(formatDate(s.modified));
+		const summary = s.summary;
+		console.log(`  ${num} ${modified} - ${summary}`);
+	}
+	console.log();
+}
+
+export function sessionCommand(
+	input?: string,
+	options: SessionCommandOptions = {},
+): void {
+	const { sessionId, ...outputOptions } = options;
+
+	// Ensure at most one output option is used
+	const outputModes = [
+		outputOptions.md && "md",
+		outputOptions.save && "save",
+		outputOptions.copy && "copy",
+	].filter(Boolean);
+
+	if (outputModes.length > 1) {
+		console.log(chalk.red("错误: --md, --save, --copy 不能同时使用"));
+		return;
+	}
+
+	const service = new ProcessService();
+
+	// 1. Try running processes first
+	const runningResult = service.selectProcess(input);
+	if ("process" in runningResult) {
+		const sessionData = service.getSessionData(runningResult.process);
+		if (!sessionData) {
+			console.log(chalk.yellow("该进程没有会话信息"));
+			return;
+		}
+		displaySessionData(
+			sessionData,
+			{ pid: runningResult.process.pid, sourceType: "running" },
+			outputOptions,
+		);
+		return;
+	}
+
+	// 2. If input is provided, try history sessions
+	if (input) {
+		const historySessions = service.getHistorySessions(input);
+
+		if (!historySessions) {
+			console.log(chalk.red(`项目路径 "${input}" 不存在`));
+			return;
+		}
+
+		if (historySessions.length === 0) {
+			console.log(chalk.yellow("该项目没有历史会话"));
+			return;
+		}
+
+		// If sessionId is provided, use it
+		if (sessionId) {
+			// Find by exact match or prefix
+			const matched = historySessions.find(
+				(s) => s.id === sessionId || s.id.startsWith(sessionId),
+			);
+			if (matched) {
+				const sessionData = service.getHistorySessionData(input, matched.id);
+				if (sessionData) {
+					displaySessionData(
+						sessionData,
+						{ sourceType: "history" },
+						outputOptions,
+					);
+				}
+				return;
+			}
+			console.log(chalk.red(`未找到会话 ID "${sessionId}"`));
+			showHistorySessions(input, historySessions);
+			return;
+		}
+
+		// No sessionId provided, use the latest (first in sorted list)
+		const latest = historySessions[0];
+		const sessionData = service.getHistorySessionData(input, latest.id);
+		if (sessionData) {
+			displaySessionData(sessionData, { sourceType: "history" }, outputOptions);
+		}
+		return;
+	}
+
+	// 3. Handle error cases from running processes
+	if (runningResult.error === "NO_PROCESSES") {
+		console.log(chalk.yellow("未找到运行中的 Claude Code 进程"));
+	} else if (runningResult.error === "PID_NOT_FOUND") {
+		console.log(chalk.red(`未找到匹配 "${runningResult.pid}" 的进程`));
+	} else if (runningResult.error === "MULTIPLE_PROCESSES") {
+		console.log(chalk.yellow("存在多个进程，请指定 PID 或路径:"));
+		for (const p of runningResult.processes) {
+			console.log(`  ${p.pid} - ${p.cwd}`);
+		}
 	}
 }

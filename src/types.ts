@@ -12,6 +12,22 @@ export interface SessionInfo {
 	modified: string;
 }
 
+/** 历史会话信息 */
+export interface HistorySession {
+	/** 会话 ID */
+	id: string;
+	/** 会话摘要 */
+	summary: string;
+	/** 消息数量 */
+	messageCount: number;
+	/** 创建时间 */
+	created: string;
+	/** 修改时间 */
+	modified: string;
+	/** 会话文件路径 */
+	filePath: string;
+}
+
 /** 进程信息 */
 export interface ProcessInfo {
 	/** 进程 ID */
