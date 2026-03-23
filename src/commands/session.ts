@@ -239,6 +239,37 @@ export function sessionCommand(
 
 	const service = new ProcessService();
 
+	// If sessionId is provided, directly search history sessions
+	if (input && sessionId) {
+		const historySessions = service.getHistorySessions(input);
+		if (!historySessions) {
+			console.log(chalk.red(`项目路径 "${input}" 不存在`));
+			return;
+		}
+		if (historySessions.length === 0) {
+			console.log(chalk.yellow("该项目没有历史会话"));
+			return;
+		}
+		// Find by exact match or prefix
+		const matched = historySessions.find(
+			(s) => s.id === sessionId || s.id.startsWith(sessionId),
+		);
+		if (matched) {
+			const sessionData = service.getHistorySessionData(input, matched.id);
+			if (sessionData) {
+				displaySessionData(
+					sessionData,
+					{ sourceType: "history" },
+					outputOptions,
+				);
+			}
+			return;
+		}
+		console.log(chalk.red(`未找到会话 ID "${sessionId}"`));
+		showHistorySessions(input, historySessions);
+		return;
+	}
+
 	// 1. Try running processes first
 	const runningResult = service.selectProcess(input);
 	if ("process" in runningResult) {
@@ -266,28 +297,6 @@ export function sessionCommand(
 
 		if (historySessions.length === 0) {
 			console.log(chalk.yellow("该项目没有历史会话"));
-			return;
-		}
-
-		// If sessionId is provided, use it
-		if (sessionId) {
-			// Find by exact match or prefix
-			const matched = historySessions.find(
-				(s) => s.id === sessionId || s.id.startsWith(sessionId),
-			);
-			if (matched) {
-				const sessionData = service.getHistorySessionData(input, matched.id);
-				if (sessionData) {
-					displaySessionData(
-						sessionData,
-						{ sourceType: "history" },
-						outputOptions,
-					);
-				}
-				return;
-			}
-			console.log(chalk.red(`未找到会话 ID "${sessionId}"`));
-			showHistorySessions(input, historySessions);
 			return;
 		}
 

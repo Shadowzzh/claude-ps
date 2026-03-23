@@ -5,6 +5,7 @@ import { installCommand } from "./commands/install.js";
 import { killCommand } from "./commands/kill.js";
 import { listCommand } from "./commands/list.js";
 import { sessionCommand } from "./commands/session.js";
+import { sessionsCommand } from "./commands/sessions.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json");
@@ -42,6 +43,13 @@ export function createCli() {
 		.option("--copy", "复制 Markdown 到剪贴板")
 		.action((input, sessionId, options) => {
 			sessionCommand(input, { ...options, sessionId });
+		});
+
+	program
+		.command("sessions <project-path>")
+		.description("列出项目的所有历史会话")
+		.action((projectPath) => {
+			sessionsCommand(projectPath);
 		});
 
 	program

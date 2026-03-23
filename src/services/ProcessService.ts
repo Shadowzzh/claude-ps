@@ -188,10 +188,20 @@ export class ProcessService {
 				}
 			}
 
+			// Clean markdown tags from summary
+			const cleanedSummary = lastUserMessage
+				.replace(/^#{1,6}\s+/gm, "") // Remove headers
+				.replace(/^[-*+]\s+/gm, "") // Remove list markers
+				.replace(/^\d+\.\s+/gm, "") // Remove numbered list
+				.replace(/^>\s+/gm, "") // Remove blockquote
+				.replace(/`[^`]+`/g, "") // Remove inline code
+				.replace(/\n+/g, " ") // Replace newlines with space
+				.trim();
+
 			return {
 				summary:
-					lastUserMessage.substring(0, 50) +
-					(lastUserMessage.length > 50 ? "..." : ""),
+					cleanedSummary.substring(0, 50) +
+					(cleanedSummary.length > 50 ? "..." : ""),
 				messageCount,
 				created,
 			};
