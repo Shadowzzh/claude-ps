@@ -6,6 +6,7 @@ import { killCommand } from "./commands/kill.js";
 import { listCommand } from "./commands/list.js";
 import { sessionCommand } from "./commands/session.js";
 import { sessionsCommand } from "./commands/sessions.js";
+import { uninstallCommand } from "./commands/uninstall.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json");
@@ -64,6 +65,13 @@ export function createCli() {
 		.description("安装 hook 脚本到 ~/.claude/hooks/ccpeek")
 		.action(() => {
 			installCommand();
+		});
+
+	program
+		.command("uninstall")
+		.description("卸载 hook 脚本和相关配置")
+		.action(() => {
+			uninstallCommand();
 		});
 
 	return program;

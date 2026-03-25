@@ -38,6 +38,12 @@ ccpeek setup  # 安装 Claude Code Hook 脚本
 pnpm install && pnpm build
 ```
 
+**卸载：**
+
+```bash
+ccpeek uninstall  # 卸载 hook 脚本和相关配置
+```
+
 ## 使用指南
 
 ### 交互模式
