@@ -2,15 +2,15 @@
 
 <div align="center">
 
-**Claude Code Process/Session Inspector**
+**Claude Code Process Viewer for Terminal**
 
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
 
-*See all processes at a glance, view conversations quickly, kill stuck instances with one key*
+*View processes, read sessions, clean up stuck instances*
 
-[Quick Start](#quick-start) • [Features](#features) • [Commands](#commands) • [How It Works](#how-it-works) • [Who Needs This](#who-needs-this) • [Privacy & Safety](#privacy--safety) • [FAQ](#faq) • [Troubleshooting](#troubleshooting) • [Uninstall](#uninstall) • [Roadmap](#roadmap)
+[Quick Start](#quick-start) • [Features](#features) • [Commands](#commands) • [How It Works](#how-it-works) • [Privacy & Security](#privacy--security) • [FAQ](#faq) • [Troubleshooting](#troubleshooting) • [Uninstall](#uninstall) • [Roadmap](#roadmap)
 
 </div>
 
@@ -23,13 +23,21 @@
 
 ## Why ccpeek?
 
-Running multiple Claude Code sessions? You know the pain:
+Running multiple Claude Code sessions quickly becomes chaotic.
 
-* Can't tell what's running - `ps`/`top` shows PIDs, not what they're doing
-* Messy session hunting - Digging through `~/.claude/projects/` is slow
-* No quick cleanup - Can't easily kill stuck instances
+- `ps` / `top` only show PIDs, not what Claude tasks are actually doing
+- Digging through `~/.claude/projects/` is slow and disconnected from live process state
+- Cleaning up stuck instances is more painful than it should be
 
-**ccpeek puts process info, session messages, and cleanup in one terminal UI.**
+**ccpeek brings process state, session content, and cleanup into one terminal workflow.**
+
+## Why not just use `ps` or manually check `~/.claude`?
+
+| Method | Good for | Missing |
+|---|---|---|
+| `ps` / `top` | Viewing running processes | No idea what Claude sessions are actually doing |
+| Manual `~/.claude` inspection | Reading stored session files | Slow, fragmented, disconnected from live process state |
+| `ccpeek` | Unified process + session + cleanup workflow | Only focused on Claude Code workflow |
 
 ## Quick Start
 
@@ -55,21 +63,21 @@ ccpeek
 ccpeek
 ```
 
-**Keybindings:**
-- `↑/k` `↓/j` - Navigate
+**Shortcuts:**
+- `↑/k` `↓/j` - Move up/down
 - `Enter` - View session messages
 - `v` - View process details
-- `d` - Kill process
+- `d` - Delete process
 - `r` - Refresh
 - `q/Esc` - Quit
 
-**View Process Details:**
+**View process details:**
 
 <p align="center">
     <img src="./public/view-detail.gif" width="800">
 </p>
 
-**View Session Messages:**
+**View session messages:**
 
 <p align="center">
     <img src="./public/view-message.gif" width="800">
@@ -80,70 +88,63 @@ ccpeek
 ```bash
 ccpeek list              # List all processes
 ccpeek list --json       # JSON output
-ccpeek show <pid>        # Show process details
+ccpeek show <pid>        # View process details
 ccpeek messages <pid>    # View session messages
 ccpeek kill <pid>        # Kill process
 ```
 
-**Messages command supports:**
+**messages supports multiple input methods:**
 
 ```bash
-# By PID (running process)
+# Method 1: Use PID (running process)
 ccpeek messages 12345
 
-# By project path (running or history)
+# Method 2: Use project path (running or historical session)
 ccpeek messages /path/to/project
 
-# By session ID
+# Method 3: Specify historical session ID
 ccpeek messages /path/to/project abc123-session-id
 ```
 
 **Output options:**
 
 ```bash
-ccpeek messages 12345           # Terminal output
-ccpeek messages 12345 --md      # Markdown to stdout
+ccpeek messages 12345           # Colored terminal output
+ccpeek messages 12345 --md      # Markdown output to stdout
 ccpeek messages 12345 --save    # Save to file
 ccpeek messages 12345 --copy    # Copy to clipboard
 ```
 
 ## How It Works
 
-ccpeek uses Claude Code hooks to map `PID ↔ SessionID`, then reads session data from `~/.claude/projects/`.
+ccpeek establishes `PID ↔ SessionID` mapping via Claude Code hooks, then reads session data from `~/.claude/projects/`.
 
 **Flow:**
 1. SessionStart hook captures PID and SessionID
 2. Mapping stored in `~/.claude/ccpeek/session-mappings.jsonl`
-3. ccpeek reads process list + mappings + session files
+3. ccpeek reads process list + mapping + session files
 
-## Who Needs This
-
-* Running multiple Claude Code instances
-* Working on remote servers via SSH
-* Heavy agent workflow users
-* Terminal/TUI enthusiasts
-
-## Privacy & Safety
+## Privacy & Security
 
 ```
-[✓] Local only    - Reads only ~/.claude files
-[✓] No uploads    - Zero data sent anywhere
-[✓] Minimal hooks - Only logs PID/SessionID mapping
-[✓] Easy removal  - ccpeek uninstall cleans everything
+[✓] Local only      - Only reads ~/.claude files
+[✓] No uploads      - Zero data transmission
+[✓] Minimal hooks   - Only records PID/SessionID mapping
+[✓] Easy uninstall  - ccpeek uninstall cleans everything
 ```
 
 ## FAQ
 
-**Q: Will it modify my Claude Code config?**
-A: Only adds hooks to `.claude/hooks/`. Your config stays untouched.
+**Q: Will it modify my Claude Code configuration?**
+A: Only adds hooks to `.claude/hooks/`, doesn't touch existing config.
 
-**Q: Can I see sessions after process ends?**
+**Q: Can I view sessions after process ends?**
 A: Yes, use `ccpeek messages /path/to/project`
 
-**Q: What if hooks fail to install?**
-A: ccpeek still works for existing sessions, just can't track new PIDs.
+**Q: What if hook installation fails?**
+A: ccpeek can still view existing sessions, just can't track new PIDs.
 
-**Q: Does it work on remote servers?**
+**Q: Can I use it on remote servers?**
 A: Yes, as long as Claude Code runs there.
 
 ## Troubleshooting
@@ -158,7 +159,7 @@ ccpeek uninstall
 ccpeek setup
 ```
 
-**Can't find sessions:**
+**Session not found:**
 ```bash
 # Verify session files exist
 ls ~/.claude/projects/
@@ -184,6 +185,3 @@ npm uninstall -g @zhangziheng/claude-peek
 
 - [ ] Remote machine support
 
-## License
-
-MIT
