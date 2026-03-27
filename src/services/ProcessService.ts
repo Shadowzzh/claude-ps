@@ -4,6 +4,11 @@ import { basename, join } from "node:path";
 import { getClaudeProcesses } from "../lib/process.js";
 import { calculateStats, parseSessionMessages } from "../lib/sessionParser.js";
 import type { HistorySession, ProcessInfo, SessionInfo } from "../types.js";
+import {
+	cleanMarkdown,
+	extractSummary,
+	extractTextContent,
+} from "../utils/text.js";
 
 export type ProcessSelectionResult =
 	| { process: ProcessInfo }
@@ -164,20 +169,7 @@ export class ProcessService {
 							created = record.timestamp;
 						}
 						if (record.type === "user" && record.message?.content) {
-							const content =
-								typeof record.message.content === "string"
-									? record.message.content
-									: record.message.content
-											.filter(
-												(item: unknown) =>
-													typeof item === "object" &&
-													item &&
-													"type" in item &&
-													item.type === "text" &&
-													"text" in item,
-											)
-											.map((item: unknown) => (item as { text: string }).text)
-											.join("") || "";
+							const content = extractTextContent(record.message.content);
 							if (content) {
 								lastUserMessage = content;
 							}
@@ -189,19 +181,10 @@ export class ProcessService {
 			}
 
 			// Clean markdown tags from summary
-			const cleanedSummary = lastUserMessage
-				.replace(/^#{1,6}\s+/gm, "") // Remove headers
-				.replace(/^[-*+]\s+/gm, "") // Remove list markers
-				.replace(/^\d+\.\s+/gm, "") // Remove numbered list
-				.replace(/^>\s+/gm, "") // Remove blockquote
-				.replace(/`[^`]+`/g, "") // Remove inline code
-				.replace(/\n+/g, " ") // Replace newlines with space
-				.trim();
+			const summary = extractSummary(lastUserMessage);
 
 			return {
-				summary:
-					cleanedSummary.substring(0, 50) +
-					(cleanedSummary.length > 50 ? "..." : ""),
+				summary,
 				messageCount,
 				created,
 			};
@@ -347,32 +330,9 @@ export class ProcessService {
 			let summary = "Session";
 			for (const msg of messages) {
 				if (msg.type === "user" && msg.message?.content) {
-					const content =
-						typeof msg.message.content === "string"
-							? msg.message.content
-							: msg.message.content
-									.filter(
-										(item: unknown) =>
-											typeof item === "object" &&
-											item &&
-											"type" in item &&
-											item.type === "text" &&
-											"text" in item,
-									)
-									.map((item: unknown) => (item as { text: string }).text)
-									.join("") || "";
+					const content = extractTextContent(msg.message.content);
 					if (content) {
-						const cleanedSummary = content
-							.replace(/^#{1,6}\s+/gm, "")
-							.replace(/^[-*+]\s+/gm, "")
-							.replace(/^\d+\.\s+/gm, "")
-							.replace(/^>\s+/gm, "")
-							.replace(/`[^`]+`/g, "")
-							.replace(/\n+/g, " ")
-							.trim();
-						summary =
-							cleanedSummary.substring(0, 50) +
-							(cleanedSummary.length > 50 ? "..." : "");
+						summary = extractSummary(content);
 						break;
 					}
 				}
@@ -428,7 +388,7 @@ export class ProcessService {
 		md += "\n## 对话历史\n\n";
 
 		for (const msg of messages) {
-			const time = new Date(msg.timestamp).toLocaleTimeString("zh-CN", {
+			const time = new Date(msg.timestamp).toLocaleTimeString(undefined, {
 				hour: "2-digit",
 				minute: "2-digit",
 				second: "2-digit",
