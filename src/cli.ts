@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { Command } from "commander";
 import { configCommand } from "./commands/config.js";
 import { detailCommand } from "./commands/detail.js";
+import { fileCommand } from "./commands/file.js";
 import { installCommand } from "./commands/install.js";
 import { killCommand } from "./commands/kill.js";
 import { listCommand } from "./commands/list.js";
@@ -52,6 +53,20 @@ export function createCli() {
 		.description(t("cli.commands.sessions"))
 		.action((projectPath) => {
 			sessionsCommand(projectPath);
+		});
+
+	program
+		.command("file <path>")
+		.description(t("cli.commands.file"))
+		.option("--md", t("cli.options.md"))
+		.option("--save [file]", t("cli.options.save"))
+		.option("--copy", t("cli.options.copy"))
+		.option("--user-only", t("cli.options.userOnly"))
+		.option("--ai-only", t("cli.options.aiOnly"))
+		.option("--tools", t("cli.options.tools"))
+		.option("--no-thinking", t("cli.options.noThinking"))
+		.action(async (path, options) => {
+			await fileCommand(path, options);
 		});
 
 	program

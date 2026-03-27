@@ -7,6 +7,7 @@ export default {
 			messages:
 				"View session messages (supports PID, project path, or project path + session ID)",
 			sessions: "List all historical sessions for a project",
+			file: "View .jsonl session file directly",
 			kill: "Kill a process",
 			setup: "Install hook scripts to ~/.claude/hooks/ccpeek",
 			uninstall: "Uninstall hook scripts and configurations",
@@ -18,6 +19,10 @@ export default {
 			save: "Save as Markdown file",
 			copy: "Copy Markdown to clipboard",
 			show: "Show current configuration",
+			userOnly: "Show only user messages",
+			aiOnly: "Show only AI responses",
+			tools: "Show only tool-related messages",
+			noThinking: "Hide thinking content",
 		},
 	},
 	tui: {
@@ -67,5 +72,35 @@ export default {
 		updated: "✓ Language set to: {lang}",
 		current: "Current language: {lang}",
 		invalid: "Invalid language. Use: zh or en",
+	},
+	file: {
+		errors: {
+			noPath: "Error: Please provide .jsonl file path",
+			usage: "\nUsage: ccpeek file <path-to-jsonl>",
+			multipleOutputModes:
+				"Error: --md, --save, --copy cannot be used together",
+			fileNotFound: "Error: File not found: {path}",
+			invalidFormat: "Error: File must be in .jsonl format",
+			parseError:
+				"Error: Unable to parse file or no valid session messages found",
+			saveFailed: "Save failed: {error}",
+			copyFailed: "Copy failed: {error}",
+			fileTooLarge: "Error: File too large ({size}MB), maximum {max}MB",
+		},
+		success: {
+			saved: "✓ Saved to: {path}",
+			copied: "✓ Copied to clipboard",
+		},
+		display: {
+			sessionFile: "\nSession File - {summary}\n",
+			filePath: "File: {path}\n",
+			statistics: "Statistics:",
+			messages: "  Messages: {total} (User: {user}, AI: {ai})",
+			tokens: "  Tokens: Input {input} / Output {output}",
+			duration: "  Duration: {minutes}m {seconds}s",
+			thinking: "  Thinking: {count} times",
+			tools: "  Tools: {tools}",
+			history: "\nConversation History ({count} messages):\n",
+		},
 	},
 };

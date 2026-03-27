@@ -253,6 +253,148 @@ export class ProcessService {
 		};
 	}
 
+	/**
+	 * Filter messages based on options
+	 */
+	filterMessages(
+		messages: ReturnType<typeof parseSessionMessages>,
+		options: {
+			userOnly?: boolean;
+			aiOnly?: boolean;
+			tools?: boolean;
+			noThinking?: boolean;
+		},
+	): ReturnType<typeof parseSessionMessages> {
+		let filtered = messages;
+
+		// Filter by role
+		if (options.userOnly) {
+			filtered = filtered.filter((msg) => msg.type === "user");
+		} else if (options.aiOnly) {
+			filtered = filtered.filter((msg) => msg.type === "assistant");
+		} else if (options.tools) {
+			filtered = filtered.filter((msg) => {
+				if (msg.type !== "assistant") return false;
+				if (!Array.isArray(msg.message?.content)) return false;
+				return msg.message.content.some(
+					(item) => item.type === "tool_use" || item.type === "tool_result",
+				);
+			});
+		}
+
+		// Filter out thinking if requested
+		if (options.noThinking && !options.tools) {
+			filtered = filtered.map((msg) => {
+				if (msg.type === "assistant" && Array.isArray(msg.message?.content)) {
+					return {
+						...msg,
+						message: {
+							...msg.message,
+							content: msg.message.content.filter(
+								(item) => item.type !== "thinking",
+							),
+						},
+					};
+				}
+				return msg;
+			});
+		}
+
+		return filtered;
+	}
+
+	/**
+	 * Parse jsonl file directly from file path
+	 */
+	parseJsonlFile(
+		filePath: string,
+		maxSize = 50 * 1024 * 1024,
+	): SessionData | null {
+		if (!existsSync(filePath)) {
+			return null;
+		}
+
+		// Check file size before reading
+		const fileStats = statSync(filePath);
+		if (fileStats.size > maxSize) {
+			return null;
+		}
+
+		try {
+			const content = readFileSync(filePath, "utf-8");
+			const lines = content.trim().split("\n");
+			const messages: ReturnType<typeof parseSessionMessages> = [];
+
+			for (const line of lines) {
+				try {
+					const record = JSON.parse(line);
+					if (record.type === "user" || record.type === "assistant") {
+						messages.push(record);
+					}
+				} catch {
+					// Ignore parse errors
+				}
+			}
+
+			if (messages.length === 0) {
+				return null;
+			}
+
+			const stats = calculateStats(messages);
+			const sessionId = basename(filePath, ".jsonl");
+
+			// Extract summary from first user message
+			let summary = "Session";
+			for (const msg of messages) {
+				if (msg.type === "user" && msg.message?.content) {
+					const content =
+						typeof msg.message.content === "string"
+							? msg.message.content
+							: msg.message.content
+									.filter(
+										(item: unknown) =>
+											typeof item === "object" &&
+											item &&
+											"type" in item &&
+											item.type === "text" &&
+											"text" in item,
+									)
+									.map((item: unknown) => (item as { text: string }).text)
+									.join("") || "";
+					if (content) {
+						const cleanedSummary = content
+							.replace(/^#{1,6}\s+/gm, "")
+							.replace(/^[-*+]\s+/gm, "")
+							.replace(/^\d+\.\s+/gm, "")
+							.replace(/^>\s+/gm, "")
+							.replace(/`[^`]+`/g, "")
+							.replace(/\n+/g, " ")
+							.trim();
+						summary =
+							cleanedSummary.substring(0, 50) +
+							(cleanedSummary.length > 50 ? "..." : "");
+						break;
+					}
+				}
+			}
+
+			return {
+				messages,
+				stats,
+				session: {
+					sessionId,
+					summary,
+					messageCount: messages.length,
+					created: stats.startTime,
+					modified: statSync(filePath).mtime.toISOString(),
+				},
+				projectName: basename(filePath, ".jsonl"),
+			};
+		} catch {
+			return null;
+		}
+	}
+
 	generateMarkdown(sessionData: SessionData): string {
 		const { messages, stats, session, projectName } = sessionData;
 
